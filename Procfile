@@ -1,1 +1,1 @@
-web: ayu-mushi-test-exe
+web: ayu-mushi-test
