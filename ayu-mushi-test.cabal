@@ -10,3 +10,4 @@ executable          ayu-mushi-test
     extensions:     OverloadedStrings
     build-depends:  base   >= 4      && < 5
                   , scotty
+                  ,http-types
