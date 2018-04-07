@@ -6,11 +6,11 @@ import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
 
-generateId :: IO [Int]
-generateId = do
-  g <- getStdGen
-  return $ map (\i -> i `mod` 10) take 8 (random g :: [Int])
-
+--generateId :: IO [Int]
+--generateId = do
+--  g <- getStdGen
+--  return $ map (\i -> i `mod` 10) $ take 8 ((fst $ random g) :: [Int])
+--
 
 main :: IO ()
 main = do
