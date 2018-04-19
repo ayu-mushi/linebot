@@ -5,7 +5,8 @@ import System.Environment
 import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
-import Data.Text.Lazy as Text(pack)
+import qualified Data.Text.Lazy as Text(pack, unpack)
+import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile)
 import Control.Monad.Trans(liftIO)
 
 
@@ -44,10 +45,10 @@ main = do
       json [(0::Int)..10]
     get "/line" $ do
       lr <- liftIO $ readFile "linerequest.json"
-      text $Text.pack lr
+      text $ Text.pack lr
     post "/callback" $ do
       b <- body
-      liftIO $ writeFile "linerequest.json" $ show b
+      liftIO $ BS.writeFile "linerequest.json" b
       text ""
 
 
@@ -67,44 +68,3 @@ main = do
     "text": "Hello, world!"
   }
 }-}
-
-
-
-
-
-  {-Just fixie_basic <- lookupEnv "FIXIE_BASIC"
-  Just line_channel_token <- lookupEnv "LINE_ACCESS_TOKEN"
-  Just line_channel_secret <- lookupEnv "LINE_CHANNEL_SECRET"
-
-  runSpock port . spockT id $ do
-    post "callback" $ do
-      b <- body
-      let Just result = (b ^? key "result" . _Array)
-      for_ result $ \msg -> do
-        let
-          Just content
-            = msg ^? key "content"
-          Just from
-            = content ^? key "from"
-        liftIO $ do
-          req <- parseUrl "https://api.line.me/v2/oauth/reply"
-          manager <- newManager tlsManagerSettings
-          let res = object [
-            "to" .= Array [from]
-           ,"toChannel" .= Number 1383378250
-           , "eventType" .=  String "138311608800106203"
-           , "content" .= content
-           ]
-         req' = req { proxy = Just (Proxy {proxyHost = "velodrome.usefixie.com", proxyPort = 80})
-         , method = "POST"
-         , requestHeaders = [ ("Content-Type", "application/json; charser=UTF-8")
-       , ("X-Line-ChannelID", BS.pack line_channel_id)
-       , ("X-Line-ChannelSecret", BS.pack line_channel_secret)
-       , ("X-Line-Trusted-User-With-ACL", BS.pack line_channel_mid)
-       , ("Proxy-Authorization", BS.pack $ "Basic " ++ fixie_basic)
-       ]
-       , requestBody = RequestBodyLBS (encode res)
-       , ()
-         }
-          httpLbs req' manager
-      text ""-}
