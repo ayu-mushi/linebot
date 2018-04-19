@@ -13,3 +13,4 @@ executable          ayu-mushi-test
                   ,http-types
                   ,random
                   , text
+                  , mtl

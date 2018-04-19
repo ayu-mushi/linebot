@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
 
 import Web.Scotty
 import System.Environment
@@ -6,6 +6,7 @@ import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
 import Data.Text.Lazy as Text(pack)
+import Control.Monad.Trans(liftIO)
 
 
 {-import Control.Lens ((^?))
@@ -41,9 +42,12 @@ main = do
       text agent
     get "/json" $ do
       json [(0::Int)..10]
+    get "/line" $ do
+      lr <- liftIO $ readFile "linerequest.json"
+      text $Text.pack lr
     post "/callback" $ do
-      b <- body
-      text $ Text.pack $ show b
+      (b::String) <- jsonData
+      liftIO $ writeFile "linerequest.json" b
       return ()
 
   {-Just fixie_basic <- lookupEnv "FIXIE_BASIC"
