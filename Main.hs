@@ -46,14 +46,13 @@ main = do
     get "/json" $ do
       json [(0::Int)..10]
     get "/line" $ do
-      lr <- liftIO $ try $ readFile "linerequest.json"
+      lr <- liftIO $ try $ readFile "/tmp/linerequest.json"
       case lr of
         Right lr' -> text $ Text.pack lr'
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      (_::Either IOException ())<- liftIO $ try $ removeFile "linerequest.json"
-      liftIO $ BS.writeFile "linerequest.json" b
+      liftIO $ BS.writeFile "/tmp/linerequest.json" b
 
 {-
 {
