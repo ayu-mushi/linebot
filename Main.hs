@@ -8,6 +8,8 @@ import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack)
 import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile)
 import Control.Monad.Trans(liftIO)
+import Control.Exception (try, IOException)
+import System.Directory (removeFile)
 
 
 {-import Control.Lens ((^?))
@@ -44,14 +46,14 @@ main = do
     get "/json" $ do
       json [(0::Int)..10]
     get "/line" $ do
-      lr <- liftIO $ readFile "linerequest.json"
-      text $ Text.pack lr
+      lr <- liftIO $ try $ readFile "linerequest.json"
+      case lr of
+        Right lr' -> text $ Text.pack lr'
+        Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
+      (_::Either IOException ())<- liftIO $ try $ removeFile "linerequest.json"
       liftIO $ BS.writeFile "linerequest.json" b
-      text ""
-
-
 
 {-
 {
