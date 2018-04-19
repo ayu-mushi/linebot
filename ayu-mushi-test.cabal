@@ -12,3 +12,4 @@ executable          ayu-mushi-test
                   , scotty
                   ,http-types
                   ,random
+                  , text
