@@ -46,9 +46,31 @@ main = do
       lr <- liftIO $ readFile "linerequest.json"
       text $Text.pack lr
     post "/callback" $ do
-      (b::String) <- jsonData
-      liftIO $ writeFile "linerequest.json" b
-      return ()
+      b <- body
+      liftIO $ writeFile "linerequest.json" $ show b
+      text ""
+
+
+
+{-
+{
+  "replyToken": "nHuyWiB7yP5Zw52FIkcQobQuGDXCTA",
+  "type": "message",
+  "timestamp": 1462629479859,
+  "source": {
+    "type": "user",
+    "userId": "U4af4980629..."
+  },
+  "message": {
+    "id": "325708",
+    "type": "text",
+    "text": "Hello, world!"
+  }
+}-}
+
+
+
+
 
   {-Just fixie_basic <- lookupEnv "FIXIE_BASIC"
   Just line_channel_token <- lookupEnv "LINE_ACCESS_TOKEN"
