@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
 
 import Web.Scotty
+import Data.Map as Map (fromList, (!))
 import System.Environment
 import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
@@ -14,11 +15,11 @@ import Control.Exception (try, IOException)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import System.Directory (removeFile)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString)
-import Data.Aeson hiding (json)
+import Text.JSON
 import Control.Monad (mplus, mzero)
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
-
+import qualified Data.Attoparsec as AP (Result(..),parseOnly)
 
 {-import Control.Lens ((^?))
 import Control.Monad.IO.Class (liftIO)
@@ -60,7 +61,7 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show $ (eitherDecode b :: Either String LINEReq)
+      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show $ (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
 
 newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
 
@@ -77,29 +78,47 @@ data Message = Message {
   , msText :: String
   } deriving Show
 
-instance FromJSON LINEReq where
-  parseJSON (Object v) = do
-    (arr::[LINEEvent]) <- v .: "events"
-    return $ Events arr
-  parseJSON _ = mzero
+instance JSON LINEReq where
+  readJSON (JSObject obj) = do
+    let map = Map.fromList $ fromJSObject obj
+    JSArray (arr::[JSValue]) <- readJSON $ map ! "events"
+    (evs::[LINEEvent]) <- mapM readJSON arr
+    return $ Events evs
+  readJSON _ = mzero
+  showJSON (Events evs) = makeObj [ ("events", showJSON evs) ]
 
-instance FromJSON Message where
-  parseJSON (Object v) = do
-    t <- v .: "type"
-    i <- v .: "id"
-    text <- v .: "text"
-    return $ Message t (read i::Int) text
-  parseJSON _ = mzero
+instance JSON Message where
+  readJSON (JSObject obj) = do
+    let map = Map.fromList $ fromJSObject obj
+    mtype    <- readJSON$map!"type"
+    mid <- readJSON$ map!"id"
+    text <- readJSON $ map ! "text"
+    return $ Message mtype (read mid::Int) text
 
-instance FromJSON LINEEvent where
-  parseJSON (Object v) = do
-    t <- v .: "type"
-    rt <- v .: "replyToken"
-    ts <- v .: "timestamp"
-    ms <- v .: "message"
-    return $ LINEEvent t rt ts ms
+  readJSON _ = mzero
+  showJSON (Message typ msid text) =
+    makeObj [ ("type", showJSON typ)
+           , ("id", showJSON msid)
+           , ("text", showJSON text)
+           ]
 
-  parseJSON _ = mzero
+instance JSON LINEEvent where
+  readJSON (JSObject obj) = do
+    let map = Map.fromList $ fromJSObject obj
+    typ <- readJSON $ map ! "type"
+    tok <- readJSON $ map ! "replyToken"
+    time <- readJSON $ map ! "timestamp"
+    mess <- readJSON $ map ! "message"
+    return $ LINEEvent typ  tok  time  mess
+
+  readJSON _ = mzero
+
+  showJSON (LINEEvent typ tok stamp mess) =
+    makeObj [ ("type", showJSON typ)
+           , ("replyToken", showJSON tok)
+           , ("timestamp", showJSON stamp)
+           , ("message", showJSON mess)
+           ]
 
 {-
 {
@@ -129,6 +148,7 @@ instance FromJSON LINEEvent where
             }
             ]
             }-}
+
 
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
     throwM = ActionT . throwM
