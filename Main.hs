@@ -90,7 +90,7 @@ main = do
         Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "Parse Error."
         Right cv -> case cv of
                          Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "NANTOKA Error."
-                         Right yes -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ yes ++ ", length:" ++ show (length yes)
+                         Right yes -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ "length:" ++ show (length yes) ++ "," ++ yes
 
 
 
