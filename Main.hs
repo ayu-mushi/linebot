@@ -16,7 +16,7 @@ import System.Directory (removeFile)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString)
 import Data.Aeson hiding (json)
 import Control.Monad (mplus, mzero)
-import Web.Scotty.Trans(ScottyError)
+import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 
 
@@ -59,7 +59,7 @@ main = do
         Right lr' -> text $ Text.pack lr'
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
-      (linereq::Either Text.Text LINEReq) <- MonadCatch.try jsonData
+      (linereq::Either IOException LINEReq) <- MonadCatch.try jsonData
       liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show linereq
 
 newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
@@ -136,4 +136,6 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
 instance (MonadCatch m, ScottyError e) => MonadCatch (ActionT e m) where
   catch (ActionT m) f = ActionT $ m `MonadCatch.catch` (runAM . f)
 
-instance Exception Text.Text
+instance ScottyError IOException where
+  stringError = userError
+  showError = Text.pack . show
