@@ -85,7 +85,13 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show $ fmap (map $ parse decodeUtf8FromStrToStr "") $ fmap (map (^. evMessage . msText).fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
+      let parsed = fmap decodeUtf8FromStrToStr' $ fmap ((^. evMessage . msText).head.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
+      case parsed of
+        Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "Parse Error."
+        Right cv -> case cv of
+                         Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "NANTOKA Error."
+                         Right yes -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" yes
+
 
 
 instance JSON LINEReq where
@@ -103,7 +109,7 @@ instance JSON Message where
     mtype    <- readJSON$ mobj!"type"
     mid <- readJSON$ mobj!"id"
     text <- readJSON $ mobj ! "text"
-    let (Right parsed) = parse decodeUtf8FromStrToStr "" text
+    let (Right parsed) = decodeUtf8FromStrToStr' text
     return $ Message mtype (read mid::Int) parsed
 
   readJSON _ = mzero
@@ -179,6 +185,10 @@ literalNewLineChar = do
 
 decodeUtf8FromStrToStr :: Parsec String u String
 decodeUtf8FromStrToStr = many $ literalUtf8 `mplus` literalBSlash `mplus` anyChar
+
+decodeUtf8FromStrToStr' :: String -> Either ParseError String
+decodeUtf8FromStrToStr' = parse decodeUtf8FromStrToStr ""
+
 
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
     throwM = ActionT . throwM
