@@ -1,9 +1,6 @@
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
-{-# LANGUAGE TemplateHaskell #-}
 
-import Data.Char (isDigit)
 import Web.Scotty
-import Data.Map as Map (fromList, (!))
 import System.Environment
 import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
@@ -17,32 +14,12 @@ import Control.Exception (try, IOException)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import System.Directory (removeFile)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString)
-import Text.JSON
-import Control.Monad (mplus, mzero)
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 import qualified Data.Attoparsec as AP (Result(..),parseOnly)
+import Post as Post
 import Control.Lens
-
-data Message = Message {
-  _msType :: String
-  , _msId :: Int
-  , _msText :: String
-  } deriving Show
-
-makeLenses ''Message
-
-data LINEEvent = LINEEvent {
-  _evType :: String
-  , _evReplyToken :: String
-  , _evTimeStamp:: Int
-  , _evMessage :: Message
-  } deriving Show
-
-makeLenses ''LINEEvent
-
-newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
-
+import Text.JSON (resultToEither, decode)
 
 {-import Control.Lens ((^?))
 import Control.Monad.IO.Class (liftIO)
@@ -84,54 +61,10 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      let v = fmap ((^. evMessage . msText).head.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
-      case v of
+      let message = fmap ((^. Post.evMessage . Post.msText) . head . Post.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String Post.LINEReq)
+      case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
         Right yes -> liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
-
-
-
-instance JSON LINEReq where
-  readJSON (JSObject obj) = do
-    let mobj = Map.fromList $ fromJSObject obj
-    JSArray (arr::[JSValue]) <- readJSON $ mobj ! "events"
-    (evs::[LINEEvent]) <- mapM readJSON arr
-    return $ Events evs
-  readJSON _ = mzero
-  showJSON (Events evs) = makeObj [ ("events", showJSON evs) ]
-
-instance JSON Message where
-  readJSON (JSObject obj) = do
-    let mobj = Map.fromList $ fromJSObject obj
-    mtype    <- readJSON$ mobj!"type"
-    mid <- readJSON$ mobj!"id"
-    text <- readJSON $ mobj ! "text"
-    return $ Message mtype (read mid::Int) text
-
-  readJSON _ = mzero
-  showJSON (Message typ msid text) =
-    makeObj [ ("type", showJSON typ)
-           , ("id", showJSON msid)
-           , ("text", showJSON text)
-           ]
-
-instance JSON LINEEvent where
-  readJSON (JSObject obj) = do
-    let mobj = Map.fromList $ fromJSObject obj
-    typ <- readJSON $ mobj ! "type"
-    tok <- readJSON $ mobj ! "replyToken"
-    time <- readJSON $ mobj ! "timestamp"
-    mess <- readJSON $ mobj ! "message"
-    return $ LINEEvent typ  tok  time  mess
-
-  readJSON _ = mzero
-
-  showJSON (LINEEvent typ tok stamp mess) =
-    makeObj [ ("type", showJSON typ)
-           , ("replyToken", showJSON tok)
-           , ("timestamp", showJSON stamp)
-           , ("message", showJSON mess)
-           ]
 
 {-
 {
