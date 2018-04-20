@@ -21,3 +21,4 @@ executable          ayu-mushi-test
                   , exceptions
                   , attoparsec
                   , containers
+                  , parsec

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
 
+import Data.Char (isDigit)
 import Web.Scotty
 import Data.Map as Map (fromList, (!))
 import System.Environment
@@ -20,6 +21,7 @@ import Control.Monad (mplus, mzero)
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 import qualified Data.Attoparsec as AP (Result(..),parseOnly)
+import Text.Parsec
 
 {-import Control.Lens ((^?))
 import Control.Monad.IO.Class (liftIO)
@@ -93,7 +95,8 @@ instance JSON Message where
     mtype    <- readJSON$map!"type"
     mid <- readJSON$ map!"id"
     text <- readJSON $ map ! "text"
-    return $ Message mtype (read mid::Int) text
+    let (Right parsed) = parse decodeUtf8FromStrToStr "" text
+    return $ Message mtype (read mid::Int) parsed
 
   readJSON _ = mzero
   showJSON (Message typ msid text) =
@@ -148,7 +151,26 @@ instance JSON LINEEvent where
             }
             ]
             }-}
+literalUtf8 :: Parsec String u Char
+literalUtf8 = do
+  slash <- char '\\'
+  n <- many digit
+  return $ (toEnum (read n :: Int) :: Char)
 
+literalBSlash :: Parsec String u Char
+literalBSlash = do
+  slash <- char '\\'
+  slash <- char '\\'
+  return '\\'
+
+literalNewLineChar :: Parsec String u Char
+literalNewLineChar = do
+  slash <- char '\\'
+  slash <- char 'n'
+  return '\n'
+
+decodeUtf8FromStrToStr :: Parsec String u String
+decodeUtf8FromStrToStr = many $ literalUtf8 `mplus` literalBSlash `mplus` anyChar
 
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
     throwM = ActionT . throwM
