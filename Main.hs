@@ -45,10 +45,10 @@ main = do
   let port = maybe 8080 read $ lookup "PORT" env
   scotty port $ do
     get "/" $ do
-      html $ "Hello, Heroku!"
+      html $ "Hello, Heroku!ああ"
     get "/hello/:name" $ do
       name <- param "name"
-      text $ "Hello, " <> name <> "!"
+      text $ "Hello, " <> name <> "!ああ"
     get "/agent" $ do
       Just agent <- header "User-Agent"
       text agent
