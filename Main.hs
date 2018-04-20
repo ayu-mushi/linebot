@@ -69,10 +69,10 @@ main = do
   let port = maybe 8080 read $ lookup "PORT" env
   scotty port $ do
     get "/" $ do
-      html $ "Hello, Heroku!ああ"
+      html $ "Hello, Heroku!"
     get "/hello/:name" $ do
       name <- param "name"
-      text $ "Hello, " <> name <> "!ああ"
+      text $ "Hello, " <> name <> "!"
     get "/agent" $ do
       Just agent <- header "User-Agent"
       text agent
@@ -90,7 +90,7 @@ main = do
         Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "Parse Error."
         Right cv -> case cv of
                          Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "NANTOKA Error."
-                         Right yes -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" yes
+                         Right yes -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ yes ++ ", length:" ++ show (length yes)
 
 
 
