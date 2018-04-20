@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
+{-# LANGUAGE TemplateHaskell #-}
 
 import Data.Char (isDigit)
 import Web.Scotty
@@ -22,6 +23,27 @@ import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 import qualified Data.Attoparsec as AP (Result(..),parseOnly)
 import Text.Parsec
+import Control.Lens
+
+data Message = Message {
+  _msType :: String
+  , _msId :: Int
+  , _msText :: String
+  } deriving Show
+
+makeLenses ''Message
+
+data LINEEvent = LINEEvent {
+  _evType :: String
+  , _evReplyToken :: String
+  , _evTimeStamp:: Int
+  , _evMessage :: Message
+  } deriving Show
+
+makeLenses ''LINEEvent
+
+newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
+
 
 {-import Control.Lens ((^?))
 import Control.Monad.IO.Class (liftIO)
@@ -63,27 +85,13 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show $ (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
+      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show $ fmap (map $ parse decodeUtf8FromStrToStr "") $ fmap (map (^. evMessage . msText).fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
 
-newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
-
-data LINEEvent = LINEEvent {
-  evType :: String
-  , evReplyToken :: String
-  , evTimeStamp:: Int
-  , evMessage :: Message
-  } deriving Show
-
-data Message = Message {
-  msType :: String
-  , msId :: Int
-  , msText :: String
-  } deriving Show
 
 instance JSON LINEReq where
   readJSON (JSObject obj) = do
-    let map = Map.fromList $ fromJSObject obj
-    JSArray (arr::[JSValue]) <- readJSON $ map ! "events"
+    let mobj = Map.fromList $ fromJSObject obj
+    JSArray (arr::[JSValue]) <- readJSON $ mobj ! "events"
     (evs::[LINEEvent]) <- mapM readJSON arr
     return $ Events evs
   readJSON _ = mzero
@@ -91,10 +99,10 @@ instance JSON LINEReq where
 
 instance JSON Message where
   readJSON (JSObject obj) = do
-    let map = Map.fromList $ fromJSObject obj
-    mtype    <- readJSON$map!"type"
-    mid <- readJSON$ map!"id"
-    text <- readJSON $ map ! "text"
+    let mobj = Map.fromList $ fromJSObject obj
+    mtype    <- readJSON$ mobj!"type"
+    mid <- readJSON$ mobj!"id"
+    text <- readJSON $ mobj ! "text"
     let (Right parsed) = parse decodeUtf8FromStrToStr "" text
     return $ Message mtype (read mid::Int) parsed
 
@@ -107,11 +115,11 @@ instance JSON Message where
 
 instance JSON LINEEvent where
   readJSON (JSObject obj) = do
-    let map = Map.fromList $ fromJSObject obj
-    typ <- readJSON $ map ! "type"
-    tok <- readJSON $ map ! "replyToken"
-    time <- readJSON $ map ! "timestamp"
-    mess <- readJSON $ map ! "message"
+    let mobj = Map.fromList $ fromJSObject obj
+    typ <- readJSON $ mobj ! "type"
+    tok <- readJSON $ mobj ! "replyToken"
+    time <- readJSON $ mobj ! "timestamp"
+    mess <- readJSON $ mobj ! "message"
     return $ LINEEvent typ  tok  time  mess
 
   readJSON _ = mzero
