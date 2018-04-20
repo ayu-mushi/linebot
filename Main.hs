@@ -6,10 +6,13 @@ import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack)
+import Data.Text.IO as Text(writeFile)
 import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile)
+import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO)
 import Control.Exception (try, IOException)
 import System.Directory (removeFile)
+import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl)
 
 
 {-import Control.Lens ((^?))
@@ -52,7 +55,7 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      liftIO $ writeFile "/tmp/linerequest.json" $ show b
+      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ BsUtf8.foldl (\str c -> str ++ [c]) "" b
 
 {-
 {

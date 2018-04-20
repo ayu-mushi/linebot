@@ -16,3 +16,4 @@ executable          ayu-mushi-test
                   , mtl
                   , bytestring
                   , directory
+                  , utf8-string
