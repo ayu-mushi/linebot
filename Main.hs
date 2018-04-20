@@ -59,8 +59,8 @@ main = do
         Right lr' -> text $ Text.pack lr'
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
-      (linereq::Either IOException LINEReq) <- MonadCatch.try jsonData
-      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show linereq
+      b <- body
+      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show $ (eitherDecode b :: Either String LINEReq)
 
 newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
 
