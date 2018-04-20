@@ -22,7 +22,6 @@ import Control.Monad (mplus, mzero)
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 import qualified Data.Attoparsec as AP (Result(..),parseOnly)
-import Text.Parsec
 import Control.Lens
 
 data Message = Message {
@@ -85,12 +84,10 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      let parsed = fmap decodeUtf8FromStrToStr' $ fmap ((^. evMessage . msText).head.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
-      case parsed of
-        Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "Parse Error."
-        Right cv -> case cv of
-                         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
-                         Right yes -> liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "length:" ++ show (length yes) ++ "," ++ yes
+      let v = fmap ((^. evMessage . msText).head.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
+      case v of
+        Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
+        Right yes -> liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
 
 
 
@@ -109,8 +106,7 @@ instance JSON Message where
     mtype    <- readJSON$ mobj!"type"
     mid <- readJSON$ mobj!"id"
     text <- readJSON $ mobj ! "text"
-    let (Right parsed) = decodeUtf8FromStrToStr' text
-    return $ Message mtype (read mid::Int) parsed
+    return $ Message mtype (read mid::Int) text
 
   readJSON _ = mzero
   showJSON (Message typ msid text) =
@@ -165,30 +161,6 @@ instance JSON LINEEvent where
             }
             ]
             }-}
-literalUtf8 :: Parsec String u Char
-literalUtf8 = do
-  slash <- char '\\'
-  n <- many digit
-  return $ (toEnum (read n :: Int) :: Char)
-
-literalBSlash :: Parsec String u Char
-literalBSlash = do
-  slash <- char '\\'
-  slash <- char '\\'
-  return '\\'
-
-literalNewLineChar :: Parsec String u Char
-literalNewLineChar = do
-  slash <- char '\\'
-  slash <- char 'n'
-  return '\n'
-
-decodeUtf8FromStrToStr :: Parsec String u String
-decodeUtf8FromStrToStr = many $ literalUtf8 `mplus` literalBSlash `mplus` anyChar
-
-decodeUtf8FromStrToStr' :: String -> Either ParseError String
-decodeUtf8FromStrToStr' = parse decodeUtf8FromStrToStr ""
-
 
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
     throwM = ActionT . throwM
