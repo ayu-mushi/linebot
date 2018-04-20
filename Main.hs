@@ -12,7 +12,7 @@ import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO)
 import Control.Exception (try, IOException)
 import System.Directory (removeFile)
-import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl)
+import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString)
 
 
 {-import Control.Lens ((^?))
@@ -55,7 +55,7 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ BsUtf8.foldl (\str c -> str ++ [c]) "" b
+      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ BsUtf8.toString b
 
 {-
 {
