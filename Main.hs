@@ -52,7 +52,7 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      liftIO $ BS.writeFile "/tmp/linerequest.json" b
+      liftIO $ writeFile "/tmp/linerequest.json" $ show b
 
 {-
 {
@@ -69,3 +69,16 @@ main = do
     "text": "Hello, world!"
   }
 }-}
+
+{-{"events":
+  [{"type":"message",
+  "replyToken":"fb5ff2b6d4764384be43105de58b6e4a",
+  "source":{"userId":"Ub0292059288c2655f61486607cf0c7b9","type":"user"},
+  "timestamp":1524182254956,
+  "message":{"type":"text",
+            "id":"7822858435458",
+            "text":"Hey I am FAKE REAL"
+            }
+            }
+            ]
+            }-}
