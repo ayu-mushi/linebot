@@ -8,8 +8,8 @@ import System.Environment
 import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
-import qualified Data.Text.Lazy as Text(pack, unpack, Text)
-import Data.Text.IO as Text(writeFile)
+import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict)
+import Data.Text.IO as Text(writeFile, readFile)
 import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO)
@@ -79,18 +79,18 @@ main = do
     get "/json" $ do
       json [(0::Int)..10]
     get "/line" $ do
-      lr <- liftIO $ MonadCatch.try $ readFile "/tmp/linerequest.json"
+      lr <- liftIO $ MonadCatch.try $ Text.readFile "/tmp/linerequest.json"
       case lr of
-        Right lr' -> text $ Text.pack lr'
+        Right lr' -> text $ Text.fromStrict lr'
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
       let parsed = fmap decodeUtf8FromStrToStr' $ fmap ((^. evMessage . msText).head.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String LINEReq)
       case parsed of
-        Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "Parse Error."
+        Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "Parse Error."
         Right cv -> case cv of
-                         Left _ -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" "NANTOKA Error."
-                         Right yes -> liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ "length:" ++ show (length yes) ++ "," ++ yes
+                         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
+                         Right yes -> liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "length:" ++ show (length yes) ++ "," ++ yes
 
 
 
