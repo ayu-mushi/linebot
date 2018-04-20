@@ -61,10 +61,8 @@ main = do
     post "/callback" $ do
       (linereq::Either Text.Text LINEReq) <- MonadCatch.try jsonData
       liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ show linereq
-      b <- body
-      liftIO $ Prelude.writeFile "/tmp/linerequest.json" $ BsUtf8.toString b
 
-data LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
+newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
 
 data LINEEvent = LINEEvent {
   evType :: String
@@ -83,6 +81,7 @@ instance FromJSON LINEReq where
   parseJSON (Object v) = do
     (arr::[LINEEvent]) <- v .: "events"
     return $ Events arr
+  parseJSON _ = mzero
 
 instance FromJSON Message where
   parseJSON (Object v) = do
