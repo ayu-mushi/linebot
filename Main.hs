@@ -13,7 +13,7 @@ import qualified Data.ByteString as BSStrict (ByteString, pack, unpack)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO, lift)
 import Control.Exception (try, IOException)
-import Control.Monad (mplus, mzero)
+import Control.Monad (mplus, mzero, MonadPlus)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
 import Web.Scotty.Trans(ScottyError(..))
@@ -65,14 +65,17 @@ main = do
 mainParser  :: (ScottyError e) => AccessToken -> ReplyToken -> ParsecT String u (ActionT e IO) ()
 mainParser ac_token rep_token = do
   star <- char '☆'
-  secStr <- (Just <$> secondParser) <|> return Nothing
+  secStr <- Parsec.try (Just <$> secondParser) <|> return Nothing
   str <- many anyToken
-  let ifSecond = do
-      case secStr of
-        Just secStr' -> lift $ lineReply ac_token rep_token secStr'
-        Nothing -> mzero
-  ifSecond <|> (lift $ lineReply ac_token rep_token str)
+  (mappMaybe (lift . lineReply ac_token rep_token) secStr) <|> (lift $ lineReply ac_token rep_token str)
   return ()
+
+mappMaybe :: MonadPlus m => (a -> m b) -> Maybe a -> m b
+mappMaybe mapp may =
+  case may of
+       Just a -> mapp a
+       Nothing -> mzero
+
 
 secondParser :: (ScottyError e) => ParsecT String u (ActionT e IO) String
 secondParser = do
