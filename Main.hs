@@ -70,7 +70,7 @@ main = do
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
         Right yes -> do
-          liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
+          liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "reply token is: " ++ rep_tok ++ ", length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
           request <- parseUrl "https://api.line.me/v2/bot/message/reply"
           let postRequest = request {
             method = "POST"
