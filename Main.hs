@@ -31,7 +31,7 @@ main :: IO ()
 main = do
   env <- getEnvironment
   let port = maybe 8080 read $ lookup "PORT" env
-  Just channelAccessToken <- lookupEnv "ACCESS_TOKEN"
+  channelAccessToken <- accessToken
 
   scotty port $ do
     get "/" $ do
@@ -54,7 +54,8 @@ main = do
 
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
       let message = fmap (^. Post.evMessage . Post.msText) lineev
-      let (Right rep_tok) = fmap (^. Post.evReplyToken) lineev
+      let user_id = fmap (^. Post.evMessage . Post.msText) lineev
+      let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
@@ -62,14 +63,24 @@ main = do
           lineReply channelAccessToken rep_tok yes
 
 
-lineReply :: (ScottyError e) => String -> String -> String -> ActionT e IO ()
+newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
+
+accessToken :: IO AccessToken
+accessToken = do
+  Just channelAccessToken <- lookupEnv "ACCESS_TOKEN"
+  return $ AccessToken channelAccessToken
+
+bearer :: AccessToken -> String
+bearer channelAccessToken = "Bearer " ++ unAccessToken channelAccessToken
+
+lineReply :: (ScottyError e) => AccessToken -> ReplyToken -> String -> ActionT e IO ()
 lineReply channelAccessToken rep_tok message = do
   request <- parseUrl "https://api.line.me/v2/bot/message/reply"
   let postRequest = request {
     method = "POST"
     , requestHeaders =
       [ ("Content-Type", "application/json; charser=UTF-8")
-        , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ channelAccessToken)
+        , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ bearer channelAccessToken)
         ]
     , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok message
     }

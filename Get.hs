@@ -6,10 +6,13 @@ module Get
 , msType
 , msText
 , Reply(Reply)
+, Push(Push)
 , repToken
 , repMess
 , defReply
 , defReplyText
+, ReplyToken(..)
+, UserId(..)
 ) where
 
 import Data.Map as Map (fromList, (!))
@@ -26,12 +29,22 @@ data Message = Message {
 
 makeLenses ''Message
 
+newtype ReplyToken = ReplyToken { unReplyToken :: String } deriving (Show, Eq)
+
 data Reply = Reply{
-  _repToken :: String
+  _repToken :: ReplyToken
   ,_repMess :: [Message]
   } deriving (Show)
 
 makeLenses ''Reply
+
+newtype UserId = UserId { unUserId :: String } deriving (Show, Eq)
+
+data Push = Push{
+  _pushTo :: UserId
+  ,_pushMess :: [Message]
+  }
+makeLenses ''Push
 
 instance JSON Message where
   readJSON (JSObject obj) = do
@@ -48,11 +61,11 @@ instance JSON Reply where
     tok    <- readJSON$ mobj!"replyToken"
     JSArray mess <- readJSON$ mobj!"messages"
     (mess'::[Message]) <- mapM readJSON mess
-    return $ Reply tok mess'
+    return $ Reply (ReplyToken tok) mess'
 
   readJSON _ = mzero
   showJSON (Reply tok mess) =
-    makeObj [ ("replyToken", showJSON tok),
+    makeObj [ ("replyToken", showJSON $ unReplyToken tok),
               ("messages", JSArray $ map showJSON mess)
            ]
 
@@ -66,7 +79,7 @@ instance FromJSON Reply where
   parseJSON (Object v) = do
     rt <- v .: "replyToken"
     ms <- v .: "messages"
-    return $ Reply rt ms
+    return $ Reply (ReplyToken rt) ms
 
 instance ToJSON Message where
   toJSON v = object
@@ -74,14 +87,20 @@ instance ToJSON Message where
      "text" .= (v ^. msText)]
 
 instance ToJSON Reply where
-  toJSON v = object ["replyToken" .= (v ^. repToken),
+  toJSON v = object ["replyToken" .= (unReplyToken $ v ^. repToken),
                      "messages" .= (v ^. repMess)]
 
+instance ToJSON Push where
+  toJSON v = object ["to" .= (unUserId $ v ^. pushTo),
+                     "messages" .= (v ^. pushMess)]
 defMessage :: Message
 defMessage = Message "text" ""
 
-defReply :: String -> Reply
+defReply :: ReplyToken -> Reply
 defReply token = Reply token [defMessage]
 
-defReplyText :: String -> String -> Reply
+defReplyText :: ReplyToken -> String -> Reply
 defReplyText token text = Reply token [Message "text" text]
+
+defPostText :: UserId -> String -> Push
+defPostText to text = Push {_pushTo = to, _pushMess=[Message "text" text]}
