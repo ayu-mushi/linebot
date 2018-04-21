@@ -72,11 +72,13 @@ instance JSON LINEEvent where
     let mobj = Map.fromList $ fromJSObject obj
     typ <- readJSON $ mobj ! "type"
     tok <- readJSON $ mobj ! "replyToken"
+    src <- readJSON $ mobj ! "source"
     time <- readJSON $ mobj ! "timestamp"
     mess <- readJSON $ mobj ! "message"
     return $ LINEEvent {
       _evType=typ
       ,_evReplyToken=(ReplyToken tok)
+      ,_evSource=src
       ,_evTimeStamp=time
       ,_evMessage=mess
       }
