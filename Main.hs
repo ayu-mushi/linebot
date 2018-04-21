@@ -8,7 +8,8 @@ import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict)
 import qualified Data.Text as StrictText(pack)
 import Data.Text.IO as Text(writeFile, readFile)
-import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, fromStrict, toStrict)
+import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, fromStrict, toStrict, ByteString)
+import qualified Data.ByteString as BSStrict (ByteString, pack, unpack)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO)
 import Control.Exception (try, IOException)
@@ -60,7 +61,9 @@ main = do
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
         Right yes -> do
-          lineReply channelAccessToken rep_tok yes
+          resp <- lineReply channelAccessToken rep_tok yes
+          (e::Either IOException ())<- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
+          return ()
 
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
@@ -70,23 +73,22 @@ accessToken = do
   Just channelAccessToken <- lookupEnv "ACCESS_TOKEN"
   return $ AccessToken channelAccessToken
 
-bearer :: AccessToken -> String
-bearer channelAccessToken = "Bearer " ++ unAccessToken channelAccessToken
+bearer :: AccessToken -> BSStrict.ByteString
+bearer channelAccessToken = BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ unAccessToken channelAccessToken
 
-lineReply :: (ScottyError e) => AccessToken -> ReplyToken -> String -> ActionT e IO ()
+lineReply :: (ScottyError e) => AccessToken -> ReplyToken -> String -> ActionT e IO (Response BS.ByteString)
 lineReply channelAccessToken rep_tok message = do
   request <- parseUrl "https://api.line.me/v2/bot/message/reply"
   let postRequest = request {
     method = "POST"
     , requestHeaders =
       [ ("Content-Type", "application/json; charser=UTF-8")
-        , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ bearer channelAccessToken)
+        , ("Authorization", bearer channelAccessToken)
         ]
     , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok message
     }
   manager <- liftIO $ newManager tlsManagerSettings
   httpLbs postRequest manager
-  return ()
 
 {-
 {
