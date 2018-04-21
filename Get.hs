@@ -11,6 +11,7 @@ module Get
 , repMess
 , defReply
 , defReplyText
+, defPushText
 , ReplyToken(..)
 , UserId(..)
 ) where
@@ -102,5 +103,5 @@ defReply token = Reply token [defMessage]
 defReplyText :: ReplyToken -> String -> Reply
 defReplyText token text = Reply token [Message "text" text]
 
-defPostText :: UserId -> String -> Push
-defPostText to text = Push {_pushTo = to, _pushMess=[Message "text" text]}
+defPushText :: UserId -> String -> Push
+defPushText to text = Push {_pushTo = to, _pushMess=[Message "text" text]}

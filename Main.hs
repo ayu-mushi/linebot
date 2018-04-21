@@ -55,14 +55,14 @@ main = do
 
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
       let message = fmap (^. Post.evMessage . Post.msText) lineev
-      let user_id = fmap (^. Post.evMessage . Post.msText) lineev
+      let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
         Right yes -> do
-          resp <- lineReply channelAccessToken rep_tok yes
-          (e::Either IOException ())<- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
+          resp <- linePush channelAccessToken user_id yes
+          (e::Either IOException ()) <- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
           return ()
 
 
@@ -86,6 +86,20 @@ lineReply channelAccessToken rep_tok message = do
         , ("Authorization", bearer channelAccessToken)
         ]
     , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok message
+    }
+  manager <- liftIO $ newManager tlsManagerSettings
+  httpLbs postRequest manager
+
+linePush :: (ScottyError e) => AccessToken -> UserId -> String -> ActionT e IO (Response BS.ByteString)
+linePush channelAccessToken uid message = do
+  request <- parseUrl "https://api.line.me/v2/bot/message/push"
+  let postRequest = request {
+    method = "POST"
+    , requestHeaders =
+      [ ("Content-Type", "application/json; charser=UTF-8")
+        , ("Authorization", bearer channelAccessToken)
+        ]
+    , requestBody = RequestBodyLBS $ encode $ defPushText uid message
     }
   manager <- liftIO $ newManager tlsManagerSettings
   httpLbs postRequest manager

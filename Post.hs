@@ -1,7 +1,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
 
-module Post (Message(Message), msType, msId, msText, LINEEvent(LINEEvent), evType, evReplyToken, evTimeStamp, evMessage, LINEReq(..)) where
+module Post (
+  Message(Message), msType, msId, msText, LINEEvent(LINEEvent), evType, evReplyToken, evTimeStamp, evMessage, LINEReq(..),
+  evSource, srcUserId, srcType) where
 
 import Control.Lens
 import Text.JSON as JSON
