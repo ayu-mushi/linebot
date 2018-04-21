@@ -11,8 +11,9 @@ import Data.Text.IO as Text(writeFile, readFile)
 import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, fromStrict, toStrict, ByteString)
 import qualified Data.ByteString as BSStrict (ByteString, pack, unpack)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
-import Control.Monad.Trans(liftIO)
+import Control.Monad.Trans(liftIO, lift)
 import Control.Exception (try, IOException)
+import Control.Monad (mplus, mzero)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
 import Web.Scotty.Trans(ScottyError(..))
@@ -58,22 +59,28 @@ main = do
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
-      case parse secondParser "" message of
-          Left err -> return ()
-          Right n -> do
-            liftIO $ threadDelay $ n * (10^6)
-
-      resp <- lineReply channelAccessToken rep_tok message
-      (e::Either IOException ()) <- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
-
+      runParserT (mainParser channelAccessToken rep_tok) "" "" message
       return ()
 
-secondParser :: Parsec String u Int
+mainParser  :: (ScottyError e) => AccessToken -> ReplyToken -> ParsecT String u (ActionT e IO) ()
+mainParser ac_token rep_token = do
+  star <- char '☆'
+  secStr <- (Just <$> secondParser) <|> return Nothing
+  str <- many anyToken
+  let ifSecond = do
+      case secStr of
+        Just secStr' -> lift $ lineReply ac_token rep_token secStr'
+        Nothing -> mzero
+  ifSecond <|> (lift $ lineReply ac_token rep_token str)
+  return ()
+
+secondParser :: (ScottyError e) => ParsecT String u (ActionT e IO) String
 secondParser = do
   numeric <- Parsec.many Parsec.digit
   Parsec.string "秒後"
   Parsec.eof
-  return $ read numeric
+  lift $ liftIO $ threadDelay $ read numeric * (10^6)
+  return (numeric ++ "秒後")
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 
