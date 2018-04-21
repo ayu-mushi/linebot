@@ -7,20 +7,22 @@ import Network.HTTP.Types.Status()
 import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict)
 import Data.Text.IO as Text(writeFile, readFile)
-import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile)
+import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, fromStrict, toStrict)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO)
 import Control.Exception (try, IOException)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import System.Directory (removeFile)
-import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString)
+import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 import qualified Data.Attoparsec as AP (Result(..),parseOnly)
-import Post as Post
 import Control.Lens
-import Text.JSON (resultToEither, decode)
+import Text.JSON  as JSON(resultToEither, decode, showJSON, encode)
+import Network.HTTP.Conduit
 
+import Post as Post
+import Get as Get
 {-import Control.Lens ((^?))
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson
@@ -43,6 +45,8 @@ main :: IO ()
 main = do
   env <- getEnvironment
   let port = maybe 8080 read $ lookup "PORT" env
+  Just channelAccessToken    <- lookupEnv "ACCESS_TOKEN"
+
   scotty port $ do
     get "/" $ do
       html $ "Hello, Heroku!"
@@ -62,9 +66,22 @@ main = do
     post "/callback" $ do
       b <- body
       let message = fmap ((^. Post.evMessage . Post.msText) . head . Post.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String Post.LINEReq)
+      let (Right rep_tok) = fmap ((^. Post.evReplyToken) . head . Post.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String Post.LINEReq)
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
-        Right yes -> liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
+        Right yes -> do
+          liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
+          request <- parseUrl "https://api.line.me/v2/bot/message/reply"
+          let postRequest = request {
+            method = "POST"
+            , requestHeaders = [ ("Content-Type", "application/json; charser=UTF-8")
+                         , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ channelAccessToken)
+                         ]
+            , requestBody = RequestBodyLBS $ BsUtf8.fromString $ encode $ defReplyText rep_tok "Hello! こんにちは!"
+            }
+          manager <- liftIO $ newManager tlsManagerSettings
+          httpLbs postRequest manager
+          return ()
 
 {-
 {
@@ -96,7 +113,7 @@ main = do
             }-}
 
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
-    throwM = ActionT . throwM
+  throwM = ActionT . throwM
 
 instance (MonadCatch m, ScottyError e) => MonadCatch (ActionT e m) where
   catch (ActionT m) f = ActionT $ m `MonadCatch.catch` (runAM . f)
