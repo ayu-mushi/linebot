@@ -18,15 +18,16 @@ import System.Directory (removeFile)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
-import qualified Data.Attoparsec as AP (Result(..),parseOnly)
 import Control.Lens
 --import Text.JSON  as JSON(resultToEither, decode, showJSON, encode)
 import Data.Aeson as Aeson
 import Network.HTTP.Conduit
 import qualified Codec.Binary.UTF8.String as Codec(encode, decode, encodeString, decodeString)
+import Control.Concurrent (threadDelay)
 
 import Post as Post
 import Get as Get
+import Text.Parsec as Parsec
 
 main :: IO ()
 main = do
@@ -54,17 +55,26 @@ main = do
       b <- body
 
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
-      let message = fmap (^. Post.evMessage . Post.msText) lineev
+      let (Right message) = fmap (^. Post.evMessage . Post.msText) lineev
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
-      case message of
-        Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
-        Right yes -> do
-          resp <- linePush channelAccessToken user_id yes
-          (e::Either IOException ()) <- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
-          return ()
+      case parse parser1 "" message of
+          Left err -> return ()
+          Right n -> do
+            liftIO $ threadDelay n
 
+      resp <- linePush channelAccessToken user_id message
+      (e::Either IOException ()) <- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
+
+      return ()
+
+parser1 :: Parsec String u Int
+parser1 = do
+  numeric <- Parsec.many Parsec.digit
+  Parsec.string "秒後"
+  Parsec.eof
+  return $ read numeric
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 

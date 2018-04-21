@@ -25,3 +25,4 @@ executable          ayu-mushi-test
                   , lens
                   , http-conduit
                   , aeson
+                  , parsec
