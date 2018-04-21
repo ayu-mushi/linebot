@@ -8,6 +8,7 @@ import Text.JSON as JSON
 import Data.Map as Map (fromList, (!))
 import Control.Monad (mplus, mzero)
 import Data.Aeson as Aeson
+import qualified Codec.Binary.UTF8.String as Codec (encodeString, decodeString)
 
 data Message = Message {
   _msType :: String
@@ -83,7 +84,7 @@ instance FromJSON Message where
     t <- v .: "type"
     i <- v .: "id"
     text <- v .: "text"
-    return $ Message t (read i::Int) text
+    return $ Message t (read i::Int) (Codec.decodeString text)
   parseJSON _ = mzero
 
 instance FromJSON LINEEvent where
