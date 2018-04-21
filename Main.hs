@@ -60,7 +60,7 @@ main = do
             , requestHeaders = [ ("Content-Type", "application/json; charser=UTF-8")
                          , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ channelAccessToken)
                          ]
-            , requestBody = RequestBodyLBS $ BsUtf8.fromString $ encode $ defReplyText rep_tok $ yes
+            , requestBody = RequestBodyLBS $ BsUtf8.fromString $ show $ defReplyText rep_tok b
             }
           manager <- liftIO $ newManager tlsManagerSettings
           httpLbs postRequest manager

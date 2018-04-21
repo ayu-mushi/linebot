@@ -16,18 +16,19 @@ import Data.Map as Map (fromList, (!))
 import Control.Lens
 import Text.JSON
 import Control.Monad (mplus, mzero)
+import qualified Data.ByteString.Lazy as BS (ByteString)
 
 data Message = Message {
   _msType :: String
-  , _msText :: String
-  }
+  , _msText :: BS.ByteString
+  } deriving (Show)
 
 makeLenses ''Message
 
 data Reply = Reply{
   _repToken :: String
   ,_repMess :: [Message]
-  }
+  } deriving (Show)
 
 makeLenses ''Reply
 
@@ -60,5 +61,5 @@ defMessage = Message "text" ""
 defReply :: String -> Reply
 defReply token = Reply token [defMessage]
 
-defReplyText :: String -> String -> Reply
+defReplyText :: String -> BS.ByteString -> Reply
 defReplyText token text = Reply token [Message "text" text]
