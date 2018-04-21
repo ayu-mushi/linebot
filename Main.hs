@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
 
-import Web.Scotty
+import Web.Scotty as Scotty
 import System.Environment
 import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
@@ -18,7 +18,8 @@ import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 import qualified Data.Attoparsec as AP (Result(..),parseOnly)
 import Control.Lens
-import Text.JSON  as JSON(resultToEither, decode, showJSON, encode)
+--import Text.JSON  as JSON(resultToEither, decode, showJSON, encode)
+import Data.Aeson as Aeson
 import Network.HTTP.Conduit
 
 import Post as Post
@@ -28,7 +29,7 @@ main :: IO ()
 main = do
   env <- getEnvironment
   let port = maybe 8080 read $ lookup "PORT" env
-  Just channelAccessToken    <- lookupEnv "ACCESS_TOKEN"
+  Just channelAccessToken <- lookupEnv "ACCESS_TOKEN"
 
   scotty port $ do
     get "/" $ do
@@ -40,7 +41,7 @@ main = do
       Just agent <- header "User-Agent"
       text agent
     get "/json" $ do
-      json [(0::Int)..10]
+      Scotty.json [(0::Int)..10]
     get "/line" $ do
       lr <- liftIO $ MonadCatch.try $ Text.readFile "/tmp/linerequest.json"
       case lr of
@@ -48,8 +49,8 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
-      let message = fmap ((^. Post.evMessage . Post.msText) . head . Post.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String Post.LINEReq)
-      let (Right rep_tok) = fmap ((^. Post.evReplyToken) . head . Post.fromLINEReq) (resultToEither $ decode $ BsUtf8.toString b :: Either String Post.LINEReq)
+      let message = fmap ((^. Post.evMessage . Post.msText) . head . Post.fromLINEReq) (eitherDecode b :: Either String Post.LINEReq)
+      let (Right rep_tok) = fmap ((^. Post.evReplyToken) . head . Post.fromLINEReq) (eitherDecode b :: Either String Post.LINEReq)
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
         Right yes -> do
@@ -60,7 +61,7 @@ main = do
             , requestHeaders = [ ("Content-Type", "application/json; charser=UTF-8")
                          , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ channelAccessToken)
                          ]
-            , requestBody = RequestBodyLBS $ BsUtf8.fromString $ encode $ defReplyText rep_tok b
+            , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok yes
             }
           manager <- liftIO $ newManager tlsManagerSettings
           httpLbs postRequest manager
@@ -94,13 +95,5 @@ main = do
             }
             ]
             }-}
-
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
-
-instance (MonadCatch m, ScottyError e) => MonadCatch (ActionT e m) where
-  catch (ActionT m) f = ActionT $ m `MonadCatch.catch` (runAM . f)
-
-instance ScottyError IOException where
-  stringError = userError
-  showError = Text.pack . show

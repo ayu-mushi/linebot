@@ -4,9 +4,10 @@
 module Post (Message(Message), msType, msId, msText, LINEEvent(LINEEvent), evType, evReplyToken, evTimeStamp, evMessage, LINEReq(..)) where
 
 import Control.Lens
-import Text.JSON
+import Text.JSON as JSON
 import Data.Map as Map (fromList, (!))
 import Control.Monad (mplus, mzero)
+import Data.Aeson as Aeson
 
 data Message = Message {
   _msType :: String
@@ -70,3 +71,27 @@ instance JSON LINEEvent where
            , ("timestamp", showJSON stamp)
            , ("message", showJSON mess)
            ]
+
+instance FromJSON LINEReq where
+  parseJSON (Object v) = do
+    (arr::[LINEEvent]) <- v .: "events"
+    return $ Events arr
+  parseJSON _ = mzero
+
+instance FromJSON Message where
+  parseJSON (Object v) = do
+    t <- v .: "type"
+    i <- v .: "id"
+    text <- v .: "text"
+    return $ Message t (read i::Int) text
+  parseJSON _ = mzero
+
+instance FromJSON LINEEvent where
+  parseJSON (Object v) = do
+    t <- v .: "type"
+    rt <- v .: "replyToken"
+    ts <- v .: "timestamp"
+    ms <- v .: "message"
+    return $ LINEEvent t rt ts ms
+
+  parseJSON _ = mzero
