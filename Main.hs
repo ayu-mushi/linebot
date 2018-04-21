@@ -51,25 +51,31 @@ main = do
         Left (e::IOException) -> text "File not found."
     post "/callback" $ do
       b <- body
+
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
       let message = fmap (^. Post.evMessage . Post.msText) lineev
       let (Right rep_tok) = fmap (^. Post.evReplyToken) lineev
+
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
         Right yes -> do
-          --liftIO $ Text.writeFile "/tmp/linerequest.json" $ StrictText.pack $ "content is:" ++ show b ++ ", reply token is: " ++ rep_tok ++ ", length:" ++ show (length yes) ++ "," {-++"first character is: "  ++[(head yes)]++"," -} ++ (Codec.decode $ BS.unpack b)
+          lineReply channelAccessToken rep_tok yes
 
-          request <- parseUrl "https://api.line.me/v2/bot/message/reply"
-          let postRequest = request {
-            method = "POST"
-            , requestHeaders = [ ("Content-Type", "application/json; charser=UTF-8")
-                         , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ channelAccessToken)
-                         ]
-            , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok yes
-            }
-          manager <- liftIO $ newManager tlsManagerSettings
-          httpLbs postRequest manager
-          return ()
+
+lineReply :: (ScottyError e) => String -> String -> String -> ActionT e IO ()
+lineReply channelAccessToken rep_tok message = do
+  request <- parseUrl "https://api.line.me/v2/bot/message/reply"
+  let postRequest = request {
+    method = "POST"
+    , requestHeaders =
+      [ ("Content-Type", "application/json; charser=UTF-8")
+        , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ channelAccessToken)
+        ]
+    , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok message
+    }
+  manager <- liftIO $ newManager tlsManagerSettings
+  httpLbs postRequest manager
+  return ()
 
 {-
 {
