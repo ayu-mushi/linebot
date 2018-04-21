@@ -84,7 +84,7 @@ instance FromJSON Message where
     t <- v .: "type"
     i <- v .: "id"
     text <- v .: "text"
-    return $ Message t (read i::Int) (Codec.decodeString text)
+    return $ Message t (read i::Int) text
   parseJSON _ = mzero
 
 instance FromJSON LINEEvent where
