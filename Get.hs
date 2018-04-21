@@ -75,12 +75,14 @@ instance FromJSON Message where
     t <- v .: "type"
     text <- v .: "text"
     return $ Message t text
+  parseJSON _ = mzero
 
 instance FromJSON Reply where
   parseJSON (Object v) = do
     rt <- v .: "replyToken"
     ms <- v .: "messages"
     return $ Reply (ReplyToken rt) ms
+  parseJSON _ = mzero
 
 instance ToJSON Message where
   toJSON v = object

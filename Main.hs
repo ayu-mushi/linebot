@@ -13,7 +13,7 @@ import qualified Data.ByteString as BSStrict (ByteString, pack, unpack)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO, lift)
 import Control.Exception (try, IOException)
-import Control.Monad (mplus, mzero, MonadPlus)
+import Control.Monad (mplus, mzero, MonadPlus, msum)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
 import Web.Scotty.Trans(ScottyError(..))
@@ -64,10 +64,11 @@ main = do
 
 mainParser  :: (ScottyError e) => AccessToken -> ReplyToken -> ParsecT String u (ActionT e IO) ()
 mainParser ac_token rep_token = do
-  star <- char '☆'
+  star <- msum $ map char "☆λ$"
   secStr <- Parsec.try (Just <$> secondParser) <|> return Nothing
-  str <- many anyToken
-  (mappMaybe (lift . lineReply ac_token rep_token) secStr) <|> (lift $ lineReply ac_token rep_token str)
+  anyStr <- many anyToken
+  (mappMaybe (lift . lineReply ac_token rep_token) secStr)
+    <|> (lift $ lineReply ac_token rep_token anyStr)
   return ()
 
 mappMaybe :: MonadPlus m => (a -> m b) -> Maybe a -> m b
@@ -76,14 +77,13 @@ mappMaybe mapp may =
        Just a -> mapp a
        Nothing -> mzero
 
-
 secondParser :: (ScottyError e) => ParsecT String u (ActionT e IO) String
 secondParser = do
   numeric <- Parsec.many Parsec.digit
   Parsec.string "秒後"
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
-  return (numeric ++ "秒後")
+  return (numeric ++ "秒経過だよ！")
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 
