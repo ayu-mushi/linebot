@@ -14,7 +14,6 @@ import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO)
 import Control.Exception (try, IOException)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
-import System.Directory (removeFile)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
@@ -59,18 +58,18 @@ main = do
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
-      case parse parser1 "" message of
+      case parse secondParser "" message of
           Left err -> return ()
           Right n -> do
             liftIO $ threadDelay $ n * (10^6)
 
-      resp <- linePush channelAccessToken user_id message
+      resp <- lineReply channelAccessToken rep_tok message
       (e::Either IOException ()) <- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
 
       return ()
 
-parser1 :: Parsec String u Int
-parser1 = do
+secondParser :: Parsec String u Int
+secondParser = do
   numeric <- Parsec.many Parsec.digit
   Parsec.string "秒後"
   Parsec.eof
