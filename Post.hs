@@ -10,6 +10,13 @@ import Control.Monad (mplus, mzero)
 import Data.Aeson as Aeson
 import qualified Codec.Binary.UTF8.String as Codec (encodeString, decodeString)
 
+data Source = Source {
+  _srcUserId :: String,
+  _srcType :: String
+  } deriving (Show)
+
+makeLenses ''Source
+
 data Message = Message {
   _msType :: String
   , _msId :: Int
@@ -21,11 +28,13 @@ makeLenses ''Message
 data LINEEvent = LINEEvent {
   _evType :: String
   , _evReplyToken :: String
+  , _evSource :: Source --"source":{"userId":"Ub0292059288c2655f61486607cf0c7b9","type":"user"},
   , _evTimeStamp:: Int
   , _evMessage :: Message
   } deriving Show
 
 makeLenses ''LINEEvent
+
 
 
 newtype LINEReq = Events { fromLINEReq :: [LINEEvent] } deriving Show
@@ -62,16 +71,36 @@ instance JSON LINEEvent where
     tok <- readJSON $ mobj ! "replyToken"
     time <- readJSON $ mobj ! "timestamp"
     mess <- readJSON $ mobj ! "message"
-    return $ LINEEvent typ  tok  time  mess
+    return $ LINEEvent {
+      _evType=typ
+      ,_evReplyToken=tok
+      ,_evTimeStamp=time
+      ,_evMessage=mess
+      }
 
   readJSON _ = mzero
 
-  showJSON (LINEEvent typ tok stamp mess) =
-    makeObj [ ("type", showJSON typ)
-           , ("replyToken", showJSON tok)
-           , ("timestamp", showJSON stamp)
-           , ("message", showJSON mess)
+  showJSON ev =
+    makeObj [ ("type", showJSON $ ev ^. evType)
+           , ("replyToken", showJSON $ ev ^. evReplyToken)
+           , ("timestamp", showJSON $ ev ^. evTimeStamp)
+           , ("message", showJSON $ ev ^. evMessage)
            ]
+
+instance JSON Source where
+  readJSON (JSObject obj) = do
+    let mobj = Map.fromList $ fromJSObject obj
+    uid    <- readJSON$ mobj!"userId"
+    typ <- readJSON $ mobj ! "type"
+    return $ Source {_srcUserId = uid, _srcType = typ}
+
+  readJSON _ = mzero
+  showJSON src =
+    makeObj [ ("userId", showJSON $ src ^. srcUserId)
+           , ("type", showJSON $ src ^. srcType)
+           ]
+
+
 
 instance FromJSON LINEReq where
   parseJSON (Object v) = do
@@ -91,8 +120,17 @@ instance FromJSON LINEEvent where
   parseJSON (Object v) = do
     t <- v .: "type"
     rt <- v .: "replyToken"
+    src <- v .: "source"
     ts <- v .: "timestamp"
     ms <- v .: "message"
-    return $ LINEEvent t rt ts ms
+    return $ LINEEvent { _evType =t, _evReplyToken=rt, _evSource=src, _evTimeStamp=ts, _evMessage=ms}
+
+  parseJSON _ = mzero
+
+instance FromJSON Source where
+  parseJSON (Object v) = do
+    typ <- v .: "type"
+    uid <- v .: "userId"
+    return $ Source { _srcUserId = uid, _srcType =typ }
 
   parseJSON _ = mzero
