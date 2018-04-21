@@ -6,6 +6,7 @@ import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict)
+import qualified Data.Text as StrictText(pack)
 import Data.Text.IO as Text(writeFile, readFile)
 import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, fromStrict, toStrict)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
@@ -55,7 +56,8 @@ main = do
       case message of
         Left _ -> liftIO $ Text.writeFile "/tmp/linerequest.json" "NANTOKA Error."
         Right yes -> do
-          liftIO $ Text.writeFile "/tmp/linerequest.json" $ Text.toStrict $ Text.pack $ "reply token is: " ++ rep_tok ++ ", length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
+          liftIO $ Text.writeFile "/tmp/linerequest.json" $ StrictText.pack $ "content is:" ++ show b ++ ", reply token is: " ++ rep_tok ++ ", length:" ++ show (length yes) ++ "," ++"first character is: " ++[(head yes)]++","++ yes
+
           request <- parseUrl "https://api.line.me/v2/bot/message/reply"
           let postRequest = request {
             method = "POST"
