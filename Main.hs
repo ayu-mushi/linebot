@@ -23,23 +23,6 @@ import Network.HTTP.Conduit
 
 import Post as Post
 import Get as Get
-{-import Control.Lens ((^?))
-import Control.Monad.IO.Class (liftIO)
-import Data.Aeson
-import Data.Aeson.Lens (key, _Array)
-import qualified Data.ByteString.Char8 as BS
-import Data.Foldable (for_)
-import System.Environment (lookupEnv)
-
-import Network.HTTP.Conduit
-import Web.Spock.Safe-}
-
-
---generateId :: IO [Int]
---generateId = do
---  g <- getStdGen
---  return $ map (\i -> i `mod` 10) $ take 8 ((fst $ random g) :: [Int])
---
 
 main :: IO ()
 main = do
@@ -77,7 +60,7 @@ main = do
             , requestHeaders = [ ("Content-Type", "application/json; charser=UTF-8")
                          , ("Authorization", BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ channelAccessToken)
                          ]
-            , requestBody = RequestBodyLBS $ BsUtf8.fromString $ encode $ defReplyText rep_tok "Hello! こんにちは!"
+            , requestBody = RequestBodyLBS $ BsUtf8.fromString $ encode $ defReplyText rep_tok $ yes
             }
           manager <- liftIO $ newManager tlsManagerSettings
           httpLbs postRequest manager
