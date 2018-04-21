@@ -62,7 +62,7 @@ main = do
       case parse parser1 "" message of
           Left err -> return ()
           Right n -> do
-            liftIO $ threadDelay n
+            liftIO $ threadDelay $ n * 1000
 
       resp <- linePush channelAccessToken user_id message
       (e::Either IOException ()) <- liftIO $ Control.Exception.try $ BS.writeFile "/tmp/linerequest.json" $ responseBody resp
