@@ -11,7 +11,7 @@ import Data.Text.IO as Text(writeFile, readFile)
 import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, fromStrict, toStrict, ByteString)
 import qualified Data.ByteString as BSStrict (ByteString, pack, unpack)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
-import Control.Monad.Trans(liftIO, lift)
+import Control.Monad.Trans(liftIO, lift, MonadIO)
 import Control.Exception (try, IOException)
 import Control.Monad (mplus, mzero, MonadPlus, msum)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
@@ -47,7 +47,7 @@ main = do
     get "/json" $ do
       Scotty.json [(0::Int)..10]
     get "/line" $ do
-      lr <- liftIO $ MonadCatch.try $ Text.readFile "/tmp/linerequest.json"
+      lr <- liftIO $ MonadCatch.try $ Text.readFile "/tmp/linerequest.txt"
       case lr of
         Right lr' -> text $ Text.fromStrict lr'
         Left (e::IOException) -> text "File not found."
@@ -67,17 +67,17 @@ mainParser ac_token rep_token = do
   star <- msum $ map char "☆λ$"
   secStr <- Parsec.try (Just <$> secondParser) <|> return Nothing
   anyStr <- many anyToken
-  (mappMaybe (lift . lineReply ac_token rep_token) secStr)
+  (mappMaybe secStr $ lift . lineReply ac_token rep_token)
     <|> (lift $ lineReply ac_token rep_token anyStr)
   return ()
 
-mappMaybe :: MonadPlus m => (a -> m b) -> Maybe a -> m b
-mappMaybe mapp may =
+mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
+mappMaybe may mapp =
   case may of
        Just a -> mapp a
        Nothing -> mzero
 
-secondParser :: (ScottyError e) => ParsecT String u (ActionT e IO) String
+secondParser :: (MonadIO m) => ParsecT String u m String
 secondParser = do
   numeric <- Parsec.many Parsec.digit
   Parsec.string "秒後"
@@ -97,8 +97,8 @@ bearer channelAccessToken = BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ unAcc
 
 lineReply :: (ScottyError e) => AccessToken -> ReplyToken -> String -> ActionT e IO (Response BS.ByteString)
 lineReply channelAccessToken rep_tok message = do
-  request <- parseUrl "https://api.line.me/v2/bot/message/reply"
-  let postRequest = request {
+  req <- parseUrl "https://api.line.me/v2/bot/message/reply"
+  let postRequest = req {
     method = "POST"
     , requestHeaders =
       [ ("Content-Type", "application/json; charser=UTF-8")
@@ -111,8 +111,8 @@ lineReply channelAccessToken rep_tok message = do
 
 linePush :: (ScottyError e) => AccessToken -> UserId -> String -> ActionT e IO (Response BS.ByteString)
 linePush channelAccessToken uid message = do
-  request <- parseUrl "https://api.line.me/v2/bot/message/push"
-  let postRequest = request {
+  req <- parseUrl "https://api.line.me/v2/bot/message/push"
+  let postRequest = req {
     method = "POST"
     , requestHeaders =
       [ ("Content-Type", "application/json; charser=UTF-8")
