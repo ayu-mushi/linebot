@@ -65,17 +65,15 @@ main = do
 mainParser  :: (ScottyError e) => AccessToken -> ReplyToken -> ParsecT String u (ActionT e IO) ()
 mainParser ac_token rep_token = do
   star <- msum $ map char "☆λ$"
-  secStr <- Parsec.try (Just <$> secondParser) <|> return Nothing
-  anyStr <- many anyToken
-  (mappMaybe secStr $ lift . lineReply ac_token rep_token)
-    <|> (lift $ lineReply ac_token rep_token anyStr)
+  str <- helpParser <|> Parsec.try secondParser <|> many anyToken
+  lift $ lineReply ac_token rep_token str
   return ()
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
   case may of
-       Just a -> mapp a
-       Nothing -> mzero
+    Just a -> mapp a
+    Nothing -> mzero
 
 secondParser :: (MonadIO m) => ParsecT String u m String
 secondParser = do
@@ -83,7 +81,24 @@ secondParser = do
   Parsec.string "秒後"
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
-  return (numeric ++ "秒経過だよ！")
+  return (numeric ++ "秒経過しました！！！！")
+
+helpParser :: Monad m=>ParsecT String u m String
+helpParser = Parsec.try $ do
+  _ <- string "help"
+  Parsec.eof
+
+  return "($|☆|λ)で始まるメッセージを認識します。\n \
+  \以下のようなパターンのときに処理を行います。\n \
+  \help: このヘルプを表示する。\n \
+  \([1-9]*)秒後:  数字の部分の秒数待って通知します。\n \
+  \その他: オウム返しします。\
+  \"
+
+-- LINE Script
+data LSSentense a = DefVar a | InitVar a (LSFormula a) | Seq (LSSentense a) (LSSentense a)
+data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float
+data LSType = LSBool | LSString | LSNumber | LSArray
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 
