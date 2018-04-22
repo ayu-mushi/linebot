@@ -92,7 +92,9 @@ secondParser = Parsec.try $ do
   return $ numeric ++ "秒経過しました！！！！"
 
 parrotParser ::  (Monad m) => ParsecT String u m String
-parrotParser = many anyToken
+parrotParser = do
+  _ <- string "オウム" <|> string "parrot" <|> string "鏡" <|> string "mirror"<|> string "エコー" <|> string "echo"
+  many anyToken
 
 -- LINE Script
 -- 機能候補: 名前からメッセージを送る機能
@@ -190,5 +192,5 @@ helpParser = Parsec.try $ do
   \その以後が以下のようなパターンのときに処理を行います。\n \
   \「help」: このヘルプを表示する。\n \
   \「([1-9]*)秒後」:  数字の部分の秒数待った後で通知します。\n \
-  \その他: オウム返しします。\
+  \(オウム|parrot|鏡|mirror|エコー|echo): オウム返しします。\
   \"
