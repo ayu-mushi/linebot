@@ -12,8 +12,11 @@ module Get
 , defReply
 , defReplyText
 , defPushText
+, defPushTextG
+, defPushTextEither
 , ReplyToken(..)
 , UserId(..)
+, GroupId(..)
 ) where
 
 import Data.Map as Map (fromList, (!))
@@ -40,9 +43,10 @@ data Reply = Reply{
 makeLenses ''Reply
 
 newtype UserId = UserId { unUserId :: String } deriving (Show, Eq)
+newtype GroupId = GroupId { unGroupId :: String } deriving (Show, Eq)
 
 data Push = Push{
-  _pushTo :: UserId
+  _pushTo :: Either GroupId UserId
   ,_pushMess :: [Message]
   }
 makeLenses ''Push
@@ -94,7 +98,7 @@ instance ToJSON Reply where
                      "messages" .= (v ^. repMess)]
 
 instance ToJSON Push where
-  toJSON v = object ["to" .= (unUserId $ v ^. pushTo),
+  toJSON v = object ["to" .= (either unGroupId unUserId $ v ^. pushTo),
                      "messages" .= (v ^. pushMess)]
 defMessage :: Message
 defMessage = Message "text" ""
@@ -106,4 +110,10 @@ defReplyText :: ReplyToken -> String -> Reply
 defReplyText token text = Reply token [Message "text" text]
 
 defPushText :: UserId -> String -> Push
-defPushText to text = Push {_pushTo = to, _pushMess=[Message "text" text]}
+defPushText to text = Push {_pushTo = Right to, _pushMess=[Message "text" text]}
+
+defPushTextG :: GroupId -> String -> Push
+defPushTextG to text = Push {_pushTo = Left to, _pushMess=[Message "text" text]}
+
+defPushTextEither :: Either GroupId UserId -> String -> Push
+defPushTextEither to text = Push {_pushTo = to, _pushMess=[Message "text" text]}

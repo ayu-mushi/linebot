@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase #-}
 
 import Web.Scotty as Scotty
+import Data.Maybe (fromMaybe)
 import System.Environment
 import System.Directory (removeFile, doesFileExist)
 import Data.Monoid((<>))
@@ -59,10 +60,13 @@ main = do
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
       let (Right message) = fmap (^. Post.evMessage . Post.msText) lineev
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
+      let (Right group_id) = fmap ((^. Post.evSource . Post.srcGroupId)) lineev
+
+      let line_id = fromMaybe (Right user_id) $ Left <$> group_id
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
       strMay <- runParserT mainParser "" "" message
-      lineReply channelAccessToken rep_tok $ either ifError id strMay
+      linePush channelAccessToken line_id $ either ifError id strMay
       return ()
 
 mapParseError :: (String -> String) -> Parsec.Message -> Parsec.Message
@@ -176,7 +180,7 @@ lineReply channelAccessToken rep_tok message = do
   manager <- liftIO $ newManager tlsManagerSettings
   httpLbs postRequest manager
 
-linePush :: (ScottyError e) => AccessToken -> UserId -> String -> ActionT e IO (Response BS.ByteString)
+linePush :: (ScottyError e) => AccessToken -> Either GroupId UserId -> String -> ActionT e IO (Response BS.ByteString)
 linePush channelAccessToken uid message = do
   req <- parseUrl "https://api.line.me/v2/bot/message/push"
   let postRequest = req {
@@ -185,7 +189,7 @@ linePush channelAccessToken uid message = do
       [ ("Content-Type", "application/json; charser=UTF-8")
         , ("Authorization", bearer channelAccessToken)
         ]
-    , requestBody = RequestBodyLBS $ encode $ defPushText uid message
+    , requestBody = RequestBodyLBS $ encode $ defPushTextEither uid message
     }
   manager <- liftIO $ newManager tlsManagerSettings
   httpLbs postRequest manager

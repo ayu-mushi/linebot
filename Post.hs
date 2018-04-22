@@ -3,19 +3,19 @@
 
 module Post (
   Message(Message), msType, msId, msText, LINEEvent(LINEEvent), evType, evReplyToken, evTimeStamp, evMessage, LINEReq(..),
-  evSource, srcUserId, srcType) where
+  evSource, srcUserId, srcGroupId,srcType) where
 
 import Control.Lens
 import Text.JSON as JSON
 import Data.Map as Map (fromList, (!))
-import Control.Monad (mplus, mzero)
+import Control.Monad (mzero)
 import Data.Aeson as Aeson
-import qualified Codec.Binary.UTF8.String as Codec (encodeString, decodeString)
-import Get (UserId(..), ReplyToken(..))
+import Get (UserId(..), ReplyToken(..), GroupId(..))
 
 data Source = Source {
-  _srcUserId :: UserId,
-  _srcType :: String
+  _srcUserId :: UserId
+  ,_srcType :: String
+  ,_srcGroupId :: Maybe GroupId
   } deriving (Show)
 
 makeLenses ''Source
@@ -136,6 +136,7 @@ instance FromJSON Source where
   parseJSON (Object v) = do
     typ <- v .: "type"
     uid <- v .: "userId"
-    return $ Source { _srcUserId = (UserId uid), _srcType =typ }
+    gid <- v .:? "groupId"
+    return $ Source { _srcUserId = (UserId uid), _srcType =typ, _srcGroupId = fmap GroupId gid}
 
   parseJSON _ = mzero
