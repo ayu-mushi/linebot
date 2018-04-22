@@ -75,7 +75,7 @@ mapParseError f err =
 
 ifError :: ParseError -> String
 ifError err = concat $ flip map (map (mapParseError Codec.decodeString) $ filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
-  Expect [x] -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ "\n"
+  Expect ('\"':(x:"\"")) -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ "\n"
   Expect x -> "expected: " ++ x ++ "length: "++ show (length $ x) ++ "\n"
   UnExpect x -> "unexpected: " ++ x ++ "\n"
   Parsec.Message x -> "message" ++ x ++ "\n"
