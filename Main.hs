@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings,ScopedTypeVariables#-}
+{-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase #-}
 
 import Web.Scotty as Scotty
 import System.Environment
@@ -24,6 +24,7 @@ import Data.Aeson as Aeson
 import Network.HTTP.Conduit
 import qualified Codec.Binary.UTF8.String as Codec(encode, decode, encodeString, decodeString)
 import Control.Concurrent (threadDelay)
+import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message), errorMessages)
 
 import Post as Post
 import Get as Get
@@ -59,15 +60,22 @@ main = do
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
-      runParserT (mainParser channelAccessToken rep_tok) "" "" message
+      strMay <- runParserT mainParser "" "" message
+      lineReply channelAccessToken rep_tok $ either ifError id strMay
       return ()
 
-mainParser  :: (ScottyError e) => AccessToken -> ReplyToken -> ParsecT String u (ActionT e IO) ()
-mainParser ac_token rep_token = do
-  star <- msum $ map char "☆λ$"
-  str <- helpParser <|> Parsec.try secondParser <|> many anyToken
-  lift $ lineReply ac_token rep_token str
-  return ()
+ifError :: ParseError -> String
+ifError err = concat $ flip map (errorMessages err) $ \case
+  SysUnExpect x -> "sys unexpected: " ++ show x
+  Expect x -> "expected: " ++ show x
+  UnExpect x -> "unexpected: " ++ show x
+  Parsec.Message x -> "message" ++ show x
+
+mainParser  :: (MonadIO m) => ParsecT String u m String
+mainParser = do
+  star <- msum $ map char "☆λ$@%:"
+  str <- helpParser <|> secondParser <|> parrotParser
+  return str
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
@@ -76,27 +84,25 @@ mappMaybe may mapp =
     Nothing -> mzero
 
 secondParser :: (MonadIO m) => ParsecT String u m String
-secondParser = do
+secondParser = Parsec.try $ do
   numeric <- Parsec.many Parsec.digit
   Parsec.string "秒後"
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
-  return (numeric ++ "秒経過しました！！！！")
+  return $ numeric ++ "秒経過しました！！！！"
 
-helpParser :: Monad m=>ParsecT String u m String
-helpParser = Parsec.try $ do
-  _ <- string "help"
-  Parsec.eof
-
-  return "($|☆|λ)で始まるメッセージを認識します。\n \
-  \以下のようなパターンのときに処理を行います。\n \
-  \help: このヘルプを表示する。\n \
-  \([1-9]*)秒後:  数字の部分の秒数待って通知します。\n \
-  \その他: オウム返しします。\
-  \"
+parrotParser ::  (Monad m) => ParsecT String u m String
+parrotParser = many anyToken
 
 -- LINE Script
-data LSSentense a = DefVar a | InitVar a (LSFormula a) | Seq (LSSentense a) (LSSentense a)
+-- 機能候補: 名前からメッセージを送る機能
+
+lsParser ::  (Monad m) => ParsecT String u m String
+lsParser = Parsec.try $ do
+  _ <- string "ls"
+  return ""
+
+data LSSentense a = DefVar a | InitVar a (LSFormula a) | Seq (LSSentense a) (LSSentense a) | Substitution a (LSFormula a)
 data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float
 data LSType = LSBool | LSString | LSNumber | LSArray
 
@@ -168,3 +174,21 @@ linePush channelAccessToken uid message = do
             }-}
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
+
+appName :: String
+appName = "かわさきが作った人工無脳(仮) var 0.1."
+
+-- なつくようにする
+
+helpParser :: Monad m => ParsecT String u m String
+helpParser = Parsec.try $ do
+  _ <- string "help"
+  Parsec.eof
+
+  return $ appName <> "\n\
+  \help: ($|☆|λ|@|%|:)で始まるメッセージを認識します。\n \
+  \その以後が以下のようなパターンのときに処理を行います。\n \
+  \「help」: このヘルプを表示する。\n \
+  \「([1-9]*)秒後」:  数字の部分の秒数待った後で通知します。\n \
+  \その他: オウム返しします。\
+  \"
