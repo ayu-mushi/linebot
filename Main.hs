@@ -116,7 +116,7 @@ mappMaybe may mapp =
 
 secondParser :: (MonadIO m) => ParsecT String u m String
 secondParser = Parsec.try $ do
-  numeric <- Parsec.many1 Parsec.digit <?> "\"list of digit.\""
+  numeric <- Parsec.many1 Parsec.digit <?> "\"list of digit\""
   Parsec.string "秒後"
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
@@ -222,7 +222,7 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
 
 appName :: String
-appName = "かわさきが作った人工無脳(仮) ver 0.1."
+appName = "人工無脳(仮) ver 0.1."
 
 -- なつくようにする
 
