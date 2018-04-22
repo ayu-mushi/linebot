@@ -2,6 +2,7 @@
 
 import Web.Scotty as Scotty
 import System.Environment
+import System.Directory (removeFile, doesFileExist)
 import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
@@ -79,6 +80,7 @@ ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True)
                    [x] -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ ".\n"
                    xs -> "expected: " ++ xs ++ ".\n"
   UnExpect x -> "unexpected: " ++ x ++ ".\n"
+  Parsec.Message "sleeping" -> ""
   Parsec.Message x -> "message" ++ x ++ ".\n"
 
 thisappchar = "☆λ$@%:"
@@ -99,8 +101,10 @@ errorParser = do
 
 mainParser  :: (MonadIO m) => ParsecT String u m String
 mainParser = do
+  p <- lift $ liftIO $ doesFileExist "is_sleep.txt"
+  if p then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> parrotParser
+  str <- helpParser <|> secondParser <|> sleepParser <|> parrotParser
   return str
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
@@ -111,7 +115,7 @@ mappMaybe may mapp =
 
 secondParser :: (MonadIO m) => ParsecT String u m String
 secondParser = Parsec.try $ do
-  numeric <- Parsec.many Parsec.digit
+  numeric <- Parsec.many Parsec.digit <?> "expected: list of digit."
   Parsec.string "秒後"
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
@@ -123,6 +127,21 @@ parrotParser ::  (Monad m) => ParsecT String u m String
 parrotParser = do
   _ <- msum $ map string ["オウム", "parrot", "鏡", "mirror", "エコー", "echo"]
   many anyToken
+
+
+sleepParser ::  (MonadIO m) => ParsecT String u m String
+sleepParser = do
+  _ <- string "sleep"
+  skipMany space
+  numeric <- many digit
+  p <- lift $ liftIO $ doesFileExist "is_sleep.txt"
+  if p
+     then return ()
+     else do
+       lift $ liftIO $ Prelude.writeFile "is_sleep.txt" "yes"
+       lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
+       lift $ liftIO $ removeFile "is_sleep.txt"
+  return ""
 
 -- LINE Script
 -- 機能候補: 名前からメッセージを送る機能
@@ -206,7 +225,7 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
 
 appName :: String
-appName = "かわさきが作った人工無脳(仮) var 0.1."
+appName = "かわさきが作った人工無脳(仮) ver 0.1."
 
 -- なつくようにする
 
@@ -216,9 +235,9 @@ helpParser = Parsec.try $ do
   Parsec.eof
 
   return $ appName <> "\n\
-  \help: ($|☆|λ|@|%|:)で始まるメッセージを認識します。\n \
+  \help: (☆|$|λ|@|%|:)で始まるメッセージを認識します。\n \
   \その以後が以下のようなパターンのときに処理を行います。\n \
   \「help」: このヘルプを表示する。\n \
-  \「([1-9]*)秒後」:  数字の部分の秒数待った後で通知します。\n \
+  \「([0-9]+)秒後」:  数字の部分を自然数として解釈し、その秒数待った後で通知します。\n \
   \(オウム|parrot|鏡|mirror|エコー|echo): オウム返しします。\
   \"
