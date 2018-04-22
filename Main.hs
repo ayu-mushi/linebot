@@ -65,15 +65,17 @@ main = do
       return ()
 
 ifError :: ParseError -> String
-ifError err = concat $ flip map (errorMessages err) $ \case
-  SysUnExpect x -> "sys unexpected: " ++ show x
-  Expect x -> "expected: " ++ show x
-  UnExpect x -> "unexpected: " ++ show x
-  Parsec.Message x -> "message" ++ show x
+ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
+  Expect [x] -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ "\n"
+  Expect x -> "expected: " ++ x ++ "\n"
+  UnExpect x -> "unexpected: " ++ x ++ "\n"
+  Parsec.Message x -> "message" ++ x ++ "\n"
+
+thisappchar = "☆λ$@%:"
 
 mainParser  :: (MonadIO m) => ParsecT String u m String
 mainParser = do
-  star <- msum $ map char "☆λ$@%:"
+  star <- msum $ map char thisappchar
   str <- helpParser <|> secondParser <|> parrotParser
   return str
 
@@ -93,7 +95,7 @@ secondParser = Parsec.try $ do
 
 parrotParser ::  (Monad m) => ParsecT String u m String
 parrotParser = do
-  _ <- string "オウム" <|> string "parrot" <|> string "鏡" <|> string "mirror"<|> string "エコー" <|> string "echo"
+  _ <- msum $ map string ["オウム", "parrot", "鏡", "mirror", "エコー", "echo"]
   many anyToken
 
 -- LINE Script
