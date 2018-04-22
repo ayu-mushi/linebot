@@ -88,13 +88,13 @@ thisappchar = "☆λ$@%:"
 unicodeParser :: Parsec String u Char
 unicodeParser = Parsec.try $ do
   slash <- char '\\'
-  numeric <- many digit
+  numeric <- many1 digit
   return (toEnum (read numeric::Int) :: Char)
 
 errorParser :: Parsec String u String
 errorParser = do
   q <- char '\"'
-  xxx <- many $ unicodeParser <|> satisfy (/='\"')
+  xxx <- many1 $ unicodeParser <|> satisfy (/='\"')
   q2 <- char '\"'
   eof
   return xxx
@@ -115,7 +115,7 @@ mappMaybe may mapp =
 
 secondParser :: (MonadIO m) => ParsecT String u m String
 secondParser = Parsec.try $ do
-  numeric <- Parsec.many Parsec.digit <?> "expected: list of digit."
+  numeric <- Parsec.many1 Parsec.digit <?> "expected: list of digit."
   Parsec.string "秒後"
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
@@ -133,7 +133,7 @@ sleepParser ::  (MonadIO m) => ParsecT String u m String
 sleepParser = do
   _ <- string "sleep"
   skipMany space
-  numeric <- many digit
+  numeric <- many1 digit
   p <- lift $ liftIO $ doesFileExist "is_sleep.txt"
   if p
      then return ()
