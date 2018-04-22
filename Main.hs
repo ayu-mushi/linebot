@@ -67,7 +67,7 @@ main = do
 ifError :: ParseError -> String
 ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
   Expect [x] -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ "\n"
-  Expect x -> "expected: " ++ x ++ "\n"
+  Expect x -> "expected: " ++ x ++ "length: "++ show (length x) ++ "\n"
   UnExpect x -> "unexpected: " ++ x ++ "\n"
   Parsec.Message x -> "message" ++ x ++ "\n"
 
@@ -92,6 +92,8 @@ secondParser = Parsec.try $ do
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
   return $ numeric ++ "秒経過しました！！！！"
+
+-- try の位置を変える
 
 parrotParser ::  (Monad m) => ParsecT String u m String
 parrotParser = do
