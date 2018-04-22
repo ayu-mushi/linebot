@@ -115,7 +115,7 @@ mappMaybe may mapp =
 
 secondParser :: (MonadIO m) => ParsecT String u m String
 secondParser = Parsec.try $ do
-  numeric <- Parsec.many1 Parsec.digit <?> "expected: list of digit."
+  numeric <- Parsec.many1 Parsec.digit <?> "\"list of digit.\""
   Parsec.string "秒後"
   Parsec.eof
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
@@ -133,14 +133,10 @@ sleepParser ::  (MonadIO m) => ParsecT String u m String
 sleepParser = do
   _ <- string "sleep"
   skipMany space
-  numeric <- many1 digit
-  p <- lift $ liftIO $ doesFileExist "is_sleep.txt"
-  if p
-     then return ()
-     else do
-       lift $ liftIO $ Prelude.writeFile "is_sleep.txt" "yes"
-       lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
-       lift $ liftIO $ removeFile "is_sleep.txt"
+  numeric <- many1 digit <|> return "10"
+  lift $ liftIO $ Prelude.writeFile "is_sleep.txt" "yes"
+  lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
+  lift $ liftIO $ removeFile "is_sleep.txt"
   return ""
 
 -- LINE Script
@@ -239,6 +235,6 @@ helpParser = Parsec.try $ do
   \その以後が以下のようなパターンのときに処理を行います。\n \
   \「help」: このヘルプを表示する。\n \
   \「([0-9]+)秒後」:  数字の部分を自然数として解釈し、その秒数待った後で通知します。\n \
-  \「sleep [0-9]+」:  数字の部分を自然数として解釈し、その秒数の間死にます。\n \
+  \「sleep [0-9]+」:  数字の部分を自然数として解釈し、その秒数(デフォルト: 10)の間死にます。\n \
   \(オウム|parrot|鏡|mirror|エコー|echo): オウム返しします。\
   \"
