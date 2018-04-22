@@ -106,8 +106,10 @@ errorParser = do
 
 mainParser  :: (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
 mainParser id_either = do
-  str <- lift $ liftIO $ Prelude.readFile "is_sleep.txt"
-  if read str == id_either then fail "sleeping" else return ()
+  str <- lift $ liftIO $ Control.Exception.try $ Prelude.readFile "is_sleep.txt"
+  case str of
+       Left (a::IOException) -> return ()
+       Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
   str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser
   return str
