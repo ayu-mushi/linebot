@@ -84,7 +84,7 @@ ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True)
 thisappchar = "☆λ$@%:"
 
 unicodeParser :: Parsec String u Char
-unicodeParser = do
+unicodeParser = Parsec.try $ do
   slash <- char '\\'
   numeric <- many digit
   return (toEnum (read numeric::Int) :: Char)
@@ -92,7 +92,7 @@ unicodeParser = do
 errorParser :: Parsec String u String
 errorParser = do
   q <- char '\"'
-  xxx <- many $ unicodeParser <|> anyChar
+  xxx <- many $ unicodeParser <|> satisfy (/='\"')
   q2 <- char '\"'
   eof
   return xxx
