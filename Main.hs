@@ -64,10 +64,19 @@ main = do
       lineReply channelAccessToken rep_tok $ either ifError id strMay
       return ()
 
+mapParseError :: (String -> String) -> Parsec.Message -> Parsec.Message
+mapParseError f err =
+  case err of
+    SysUnExpect x -> SysUnExpect $ f x
+    Expect x -> Expect $ f x
+    UnExpect x -> Expect $ f x
+    Parsec.Message x -> Parsec.Message $ f x
+
+
 ifError :: ParseError -> String
-ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
+ifError err = concat $ flip map (map (mapParseError Codec.decodeString) $ filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
   Expect [x] -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ "\n"
-  Expect x -> "expected: " ++ x ++ "length: "++ show (length x) ++ "\n"
+  Expect x -> "expected: " ++ x ++ "length: "++ show (length $ x) ++ "\n"
   UnExpect x -> "unexpected: " ++ x ++ "\n"
   Parsec.Message x -> "message" ++ x ++ "\n"
 
