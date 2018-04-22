@@ -76,9 +76,10 @@ mapParseError f err =
 
 ifError :: ParseError -> String
 ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
-  Expect x -> case either (const "parseError.") id $ parse errorParser "" x of
+  Expect x | either (const False) (const True) $ parse errorParser "" x -> case either (const "parseError.") id $ parse errorParser "" x of
                    [x] -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ ".\n"
                    xs -> "expected: " ++ xs ++ ".\n"
+           | otherwise -> "expected: " ++ x ++ ".\n"
   UnExpect x -> "unexpected: " ++ x ++ ".\n"
   Parsec.Message "sleeping" -> ""
   Parsec.Message x -> "message" ++ x ++ ".\n"
@@ -231,7 +232,7 @@ helpParser = Parsec.try $ do
   Parsec.eof
 
   return $ appName <> "\n\
-  \help: (☆|$|λ|@|%|:)で始まるメッセージを認識します。\n \
+  \help: [☆$λ@%:]で始まるメッセージを認識します。\n \
   \その以後が以下のようなパターンのときに処理を行います。\n \
   \「help」: このヘルプを表示する。\n \
   \「([0-9]+)秒後」:  数字の部分を自然数として解釈し、その秒数待った後で通知します。\n \
