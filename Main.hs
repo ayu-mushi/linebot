@@ -74,12 +74,12 @@ mapParseError f err =
 
 
 ifError :: ParseError -> String
-ifError err = concat $ flip map (map (mapParseError Codec.decodeString) $ filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
-  Expect x -> case either (const "") id $ parse errorParser "" x of
-                   [x] -> ""
-                   xs -> "expected: " ++ xs
-  UnExpect x -> "unexpected: " ++ x ++ "\n"
-  Parsec.Message x -> "message" ++ x ++ "\n"
+ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
+  Expect x -> case either (const "parseError.") id $ parse errorParser "" x of
+                   [x] -> if x `elem` thisappchar then "" else "expected: " ++ [x] ++ ".\n"
+                   xs -> "expected: " ++ xs ++ ".\n"
+  UnExpect x -> "unexpected: " ++ x ++ ".\n"
+  Parsec.Message x -> "message" ++ x ++ ".\n"
 
 thisappchar = "☆λ$@%:"
 
@@ -94,6 +94,7 @@ errorParser = do
   q <- char '\"'
   xxx <- many $ unicodeParser <|> anyChar
   q2 <- char '\"'
+  eof
   return xxx
 
 mainParser  :: (MonadIO m) => ParsecT String u m String
