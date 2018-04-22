@@ -65,7 +65,7 @@ main = do
       let line_id = fromMaybe (Right user_id) $ Left <$> group_id
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
-      strMay <- runParserT mainParser "" "" message
+      strMay <- runParserT (mainParser line_id) "" "" message
       linePush channelAccessToken line_id $ either ifError id strMay
       return ()
 
@@ -104,12 +104,12 @@ errorParser = do
   eof
   return xxx
 
-mainParser  :: (MonadIO m) => ParsecT String u m String
-mainParser = do
-  p <- lift $ liftIO $ doesFileExist "is_sleep.txt"
-  if p then fail "sleeping" else return ()
+mainParser  :: (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
+mainParser id_either = do
+  str <- lift $ liftIO $ Prelude.readFile "is_sleep.txt"
+  if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser <|> parrotParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser
   return str
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
@@ -134,12 +134,12 @@ parrotParser = do
   many anyToken
 
 
-sleepParser ::  (MonadIO m) => ParsecT String u m String
-sleepParser = do
-  _ <- string "sleep"
+sleepParser ::  (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
+sleepParser id_either = do
+  _ <- msum $ map string ["sleep", "眠れ", "眠る"]
   skipMany space
   numeric <- many1 digit <|> return "10"
-  lift $ liftIO $ Prelude.writeFile "is_sleep.txt" "yes"
+  lift $ liftIO $ Prelude.writeFile "is_sleep.txt" $ show id_either
   lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
   lift $ liftIO $ removeFile "is_sleep.txt"
   return ""

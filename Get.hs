@@ -42,8 +42,8 @@ data Reply = Reply{
 
 makeLenses ''Reply
 
-newtype UserId = UserId { unUserId :: String } deriving (Show, Eq)
-newtype GroupId = GroupId { unGroupId :: String } deriving (Show, Eq)
+newtype UserId = UserId { unUserId :: String } deriving (Show, Eq, Read)
+newtype GroupId = GroupId { unGroupId :: String } deriving (Show, Eq, Read)
 
 data Push = Push{
   _pushTo :: Either GroupId UserId
