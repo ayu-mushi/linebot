@@ -50,19 +50,22 @@ main = do
     get "/json" $ do
       Scotty.json [(0::Int)..10]
     get "/line" $ do
-      lr <- liftIO $ MonadCatch.try $ Text.readFile "/tmp/linerequest.txt"
+      lr <- liftIO $ MonadCatch.try $ Prelude.readFile "/tmp/linerequest.txt"
       case lr of
-        Right lr' -> text $ Text.fromStrict lr'
-        Left (e::IOException) -> text "File not found."
+        Right lr' -> html $ Text.pack lr'
+        Left (e::IOException) -> html "File not found."
     post "/callback" $ do
       b <- body
 
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right group_id) = fmap ((^. Post.evSource . Post.srcGroupId)) lineev
-      let (Right typ) = fmap (^. Post.evType) lineev
       let line_id = fromMaybe (Right user_id) $ Left <$> group_id
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
+
+      let (Right typ) = fmap (^. Post.evType) lineev
+
+      lr <- liftIO $ Prelude.writeFile "/tmp/linerequest.txt" $ show lineev
 
       if (typ == "join") then do
         strMay <- runParserT (mainParser line_id) "" "" "help"
