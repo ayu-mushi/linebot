@@ -58,7 +58,6 @@ main = do
       b <- body
 
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
-      liftIO $ Prelude.writeFile "/tmp/linerequest.txt" $ show lineev
 
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right group_id) = fmap ((^. Post.evSource . Post.srcGroupId)) lineev
@@ -68,6 +67,10 @@ main = do
       let (Right typ) = fmap (^. Post.evType) lineev
 
       if (typ == "join") then do
+        strMay <- runParserT (mainParser line_id) "" "" "☆help"
+        linePush channelAccessToken line_id $ either ifError id strMay
+        return ()
+      else if (typ == "follow") then do
         strMay <- runParserT (mainParser line_id) "" "" "☆help"
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
