@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase #-}
+{-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase, DoAndIfThenElse #-}
 
 import Web.Scotty as Scotty
 import Data.Maybe (fromMaybe)
@@ -58,15 +58,23 @@ main = do
       b <- body
 
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
-      let (Right message) = fmap (^. Post.evMessage . Post.msText) lineev
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right group_id) = fmap ((^. Post.evSource . Post.srcGroupId)) lineev
-
+      let (Right typ) = fmap (^. Post.evType) lineev
       let line_id = fromMaybe (Right user_id) $ Left <$> group_id
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
-      strMay <- runParserT (mainParser line_id) "" "" message
-      linePush channelAccessToken line_id $ either ifError id strMay
+      if (typ == "join") then do
+        strMay <- runParserT (mainParser line_id) "" "" "help"
+        linePush channelAccessToken line_id $ either ifError id strMay
+        return ()
+      else if (typ == "message") then do
+        let (Right message) = fmap (^. Post.evMessage . Post.msText) lineev
+        strMay <- runParserT (mainParser line_id) "" "" message
+        linePush channelAccessToken line_id $ either ifError id strMay
+        return ()
+      else return ()
+
       return ()
 
 mapParseError :: (String -> String) -> Parsec.Message -> Parsec.Message
