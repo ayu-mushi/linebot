@@ -2,9 +2,9 @@
 
 import Web.Scotty as Scotty
 import Data.Maybe (fromMaybe)
+import Data.Monoid(First(..), (<>))
 import System.Environment
 import System.Directory (removeFile, doesFileExist)
-import Data.Monoid((<>))
 import Network.HTTP.Types.Status()
 import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict)
@@ -62,7 +62,7 @@ main = do
 
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right group_id) = fmap ((^. Post.evSource . Post.srcGroupId)) lineev
-      let line_id = fromMaybe (Right user_id) $ Left <$> group_id
+      let (First (Just line_id)) = (First $ (Left <$> group_id) :: (First (Either GroupId UserId))) <> (First $ (Right <$> user_id))
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
       let (Right typ) = fmap (^. Post.evType) lineev

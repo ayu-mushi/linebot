@@ -11,9 +11,10 @@ import Data.Map as Map (fromList, (!))
 import Control.Monad (mzero)
 import Data.Aeson as Aeson
 import Get (UserId(..), ReplyToken(..), GroupId(..))
+import Data.Maybe (fromJust)
 
 data Source = Source {
-  _srcUserId :: UserId
+  _srcUserId :: Maybe UserId
   ,_srcType :: String
   ,_srcGroupId :: Maybe GroupId
   } deriving (Show)
@@ -97,11 +98,11 @@ instance JSON Source where
     let mobj = Map.fromList $ fromJSObject obj
     uid    <- readJSON$ mobj!"userId"
     typ <- readJSON $ mobj ! "type"
-    return $ Source {_srcUserId = UserId uid, _srcType = typ}
+    return $ Source {_srcUserId = Just $ UserId uid, _srcType = typ}
 
   readJSON _ = mzero
   showJSON src =
-    makeObj [ ("userId", showJSON $ unUserId $ src ^. srcUserId)
+    makeObj [ ("userId", showJSON $ fromJust $ unUserId <$> src ^. srcUserId)
            , ("type", showJSON $ src ^. srcType)
            ]
 
@@ -135,8 +136,8 @@ instance FromJSON LINEEvent where
 instance FromJSON Source where
   parseJSON (Object v) = do
     typ <- v .: "type"
-    uid <- v .: "userId"
+    uid <- v .:? "userId"
     gid <- v .:? "groupId"
-    return $ Source { _srcUserId = (UserId uid), _srcType =typ, _srcGroupId = fmap GroupId gid}
+    return $ Source { _srcUserId = fmap UserId uid, _srcType =typ, _srcGroupId = fmap GroupId gid}
 
   parseJSON _ = mzero
