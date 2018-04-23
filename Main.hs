@@ -58,14 +58,14 @@ main = do
       b <- body
 
       let lineev = fmap (head . Post.fromLINEReq) $ eitherDecode b :: Either String Post.LINEEvent
+      liftIO $ Prelude.writeFile "/tmp/linerequest.txt" $ show lineev
+
       let (Right user_id) = fmap (^. Post.evSource . Post.srcUserId) lineev
       let (Right group_id) = fmap ((^. Post.evSource . Post.srcGroupId)) lineev
       let line_id = fromMaybe (Right user_id) $ Left <$> group_id
       let (Right rep_tok) = fmap ((^. Post.evReplyToken)) lineev
 
       let (Right typ) = fmap (^. Post.evType) lineev
-
-      lr <- liftIO $ Prelude.writeFile "/tmp/linerequest.txt" $ show lineev
 
       if (typ == "join") then do
         strMay <- runParserT (mainParser line_id) "" "" "help"
