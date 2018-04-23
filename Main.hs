@@ -68,7 +68,7 @@ main = do
       let (Right typ) = fmap (^. Post.evType) lineev
 
       if (typ == "join") then do
-        strMay <- runParserT (mainParser line_id) "" "" "help"
+        strMay <- runParserT (mainParser line_id) "" "" "☆help"
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
       else if (typ == "message") then do
