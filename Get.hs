@@ -19,9 +19,7 @@ module Get
 , GroupId(..)
 ) where
 
-import Data.Map as Map (fromList, (!))
 import Control.Lens hiding ((.=))
-import Text.JSON as JSON
 import Data.Aeson as Aeson
 import Control.Monad (mplus, mzero)
 import qualified Data.ByteString.Lazy as BS (ByteString)
@@ -50,29 +48,6 @@ data Push = Push{
   ,_pushMess :: [Message]
   }
 makeLenses ''Push
-
-instance JSON Message where
-  readJSON (JSObject obj) = do
-    let mobj = Map.fromList $ fromJSObject obj
-    typ <- readJSON $ mobj ! "type"
-    text <- readJSON $ mobj ! "text"
-    return $ Message typ text
-  readJSON _ = mzero
-  showJSON ms = makeObj [ ("type", showJSON $ ms ^. msType),  ("text", showJSON $ ms ^. msText)]
-
-instance JSON Reply where
-  readJSON (JSObject obj) = do
-    let mobj = Map.fromList $ fromJSObject obj
-    tok    <- readJSON$ mobj!"replyToken"
-    JSArray mess <- readJSON$ mobj!"messages"
-    (mess'::[Message]) <- mapM readJSON mess
-    return $ Reply (ReplyToken tok) mess'
-
-  readJSON _ = mzero
-  showJSON (Reply tok mess) =
-    makeObj [ ("replyToken", showJSON $ unReplyToken tok),
-              ("messages", JSArray $ map showJSON mess)
-           ]
 
 instance FromJSON Message where
   parseJSON (Object v) = do

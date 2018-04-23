@@ -72,8 +72,9 @@ main = do
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
       else if (typ == "message") then do
-        let (Right message) = fmap (^. Post.evMessage . Post.msText) lineev
-        strMay <- runParserT (mainParser line_id) "" "" message
+        let (Right (Just message)) = fmap (^. Post.evMessage) lineev
+        let text = message ^. Post.msText
+        strMay <- runParserT (mainParser line_id) "" "" text
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
       else return ()
