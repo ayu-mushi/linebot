@@ -154,7 +154,7 @@ lsParser = Parsec.try $ do
   _ <- string "ls"
   return ""
 
-data LSSentense a = DefVar a | InitVar a (LSFormula a) | Seq (LSSentense a) (LSSentense a) | Substitution a (LSFormula a)
+data LSSentense a = DefVar a (LSSentense a) | InitVar a (LSFormula a) (LSSentense a) | Seq (LSSentense a) (LSSentense a) | Substitution a (LSFormula a)
 data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float
 data LSType = LSBool | LSString | LSNumber | LSArray
 
@@ -243,5 +243,5 @@ helpParser = Parsec.try $ do
   \「help」: このヘルプを表示する。\n \
   \「([0-9]+)秒後」:  数字の部分を自然数として解釈し、その秒数待った後で通知します。\n \
   \「sleep [0-9]+」:  数字の部分を自然数として解釈し、その秒数(デフォルト: 10)の間死にます。\n \
-  \(オウム|parrot|鏡|mirror|エコー|echo): オウム返しします。\
+  \(オウム)|(parrot)|鏡|(mirror)|(エコー)|(echo): オウム返しします。\
   \"
