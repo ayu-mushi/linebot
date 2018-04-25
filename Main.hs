@@ -31,6 +31,7 @@ import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message
 import Post as Post
 import Get as Get
 import Text.Parsec as Parsec
+import qualified Shogi as Shogi
 
 main :: IO ()
 main = do
@@ -54,6 +55,8 @@ main = do
       case lr of
         Right lr' -> html $ Text.pack lr'
         Left (e::IOException) -> html "File not found."
+    get "/shogi" $ do
+      html $ Text.pack $ show Shogi.initialField
     post "/callback" $ do
       b <- body
 
