@@ -63,7 +63,7 @@ instance Show Square where
 
 instance Show Field where
   show (Field mp captured) =
-    let showDan dan mp = (showRowGrid [fromMaybe "　 " $ (i, dan) `Map.lookup` mp | i <- [0..9]])
+    let showDan dan mp = (showRowGrid [fromMaybe "　 " $ (i, dan) `Map.lookup` mp | i <- [-1..10]])
       in let danScale = fromList [((0, n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
         in let (cap::Map (Int, Int) String) = fromList $ [((-1, n), show $ (captured Map.! First) !! n) | n <- [0..(length (captured Map.! First))-1], 0 <= n] <> [((10,n), show $ (captured Map.! Later) !! n) | n <- [0..(length (captured Map.! Later))-1], 0 <= n] --持ち駒
           in let sujiScale = fromList [((n, 0), show n ++ "　") | n <- [1..9]]-- 目盛り
@@ -75,7 +75,7 @@ showRowGrid = foldl (\str strs -> strs ++ "|" ++ str) ""
 
 showColumnGrid :: [String] -> String
 showColumnGrid = foldl
-  (\str strs -> str ++ "\n" ++ (replicate (9*4) '―') ++ "\n" ++ strs)
+  (\str strs -> str ++ "\n" ++ ("   " ++ replicate (9*4) '―') ++ "\n" ++ strs)
   ""
 
 newtype ChineseNumber = ChineseNumber { fromChineseNumber :: Int}
