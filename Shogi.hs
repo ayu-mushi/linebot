@@ -3,11 +3,11 @@
 module Shogi where
 
 import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, insert, lookup, null, empty, filter, filterWithKey, delete, keys, (!))
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Functor(($>), (<$))
 import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&), both, (^.), use, (.=), (%=))
 import Control.Monad (mplus, guard, forM_, MonadPlus, mzero)
-import Control.Monad.State (get, put, StateT(..), State, runStateT, evalStateT)
+import Control.Monad.State (get, put, StateT(..), State, runStateT, evalStateT, execStateT)
 import qualified Data.List as List(delete)
 import Data.Monoid((<>))
 
@@ -258,15 +258,16 @@ movable (Pawn Unpromoted) = fmap eitherPoint up1
 movable (Pawn Promoted) = movable Gold
 
 promotion :: Piece -> Piece
-promotion = fmap (const Promoted)
+promotion = (Promoted <$)
 
-move :: Move -> Field -> Maybe Field
-move (Move pie loc dirs is_prom) field = do
-  let pies = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field
-  case Prelude.filter (\k -> loc `elem` (evalStateT (movable pie) (k, field))) pies of
-    [] -> Nothing
-    (x:xs) -> do
-      return $ Field (insert loc (Square (is_prom <$ pie) First) $ Map.delete x ((^.fromField) field)) (field ^. caputured)
+move :: Move -> Field -> [Field]
+move (Move pie loc dirs is_prom) field =
+  let pies = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
+  let ex = mapMaybe (\k -> if loc `elem` (evalStateT (movable pie) (k, field)) then Just $ head $ Prelude.filter (\(l,_) -> l == loc) $ execStateT (movable pie) (k, field) else (Nothing::Maybe ((Int,Int), Field))) pies in
+  case ex of
+    [] -> []
+    xs -> map (^. _2) xs
+
 
 -- 毎回盤をひっくり返すことで手番を表せる
 
