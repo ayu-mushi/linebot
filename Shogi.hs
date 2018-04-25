@@ -51,18 +51,18 @@ instance Show Square where
 
 instance Show Field where
   show (Field mp) =
-    let showDan dan mp = (showRowGrid [fromMaybe "　 " $ (i, dan) `Map.lookup` (fmap show mp) | i <- [1..10]])
-      in let danScale = fromList [((10,n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
-        in let sujiScale = fromList [((n, 0), show n) | n <- [1..9]]-- 目盛り
+    let showDan dan mp = (showRowGrid [fromMaybe "　 " $ (i, dan) `Map.lookup` mp | i <- [0..9]])
+      in let danScale = fromList [((0, n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
+        in let sujiScale = fromList [((n, 0), show n ++ "　") | n <- [1..9]]-- 目盛り
           in showColumnGrid $ (map (showDan `flip` (fmap show mp `union` danScale `union` sujiScale)) [0..9])
 
 
 showRowGrid :: [String] -> String
-showRowGrid = foldl (\str strs -> str ++ "|" ++ strs) ""
+showRowGrid = foldl (\str strs -> strs ++ "|" ++ str) ""
 
 showColumnGrid :: [String] -> String
 showColumnGrid = foldl
-  (\str strs -> str ++ "\n" ++ (replicate 9 '―') ++ "\n" ++ strs)
+  (\str strs -> str ++ "\n" ++ (replicate (9*4) '―') ++ "\n" ++ strs)
   ""
 
 newtype ChineseNumber = ChineseNumber { fromChineseNumber :: Int}
