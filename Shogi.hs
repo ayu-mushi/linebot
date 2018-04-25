@@ -24,21 +24,6 @@ data Piece' a =
 
 type Piece = Piece' Promotion
 
-data Promotion = Promoted | Unpromoted deriving Eq
-data Direction = Top | Par | Subtraction | DirLeft | DirRight deriving Eq
-data Move = Move Piece (Int, Int) [Direction] Promotion deriving Eq -- 指し手
-
-data Turn = First | Later deriving (Eq,Ord) -- 手番
-
-data Square = Square {_sqPiece::Piece, _sqTurn :: Turn} deriving Eq
-
-makeLenses ''Square
-
-data Field = Field { _fromField :: Map.Map (Int,Int) Square,
-                     _caputured :: Map.Map Turn [Piece]} deriving Eq -- コモナド?
-
-makeLenses ''Field
-
 instance Show Piece where
   show King = "玉"
   show Gold = "金"
@@ -55,6 +40,21 @@ instance Show Piece where
   show (Bishop Unpromoted) = "角"
   show (Bishop Promoted) = "馬"
 
+
+data Promotion = Promoted | Unpromoted deriving (Eq,Show)
+data Direction = Top | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show)
+data Move = Move Piece (Int, Int) [Direction] Promotion deriving (Eq,Show) -- 指し手
+
+data Turn = First | Later deriving (Eq,Ord) -- 手番
+
+data Square = Square {_sqPiece::Piece, _sqTurn :: Turn} deriving Eq
+
+makeLenses ''Square
+
+data Field = Field { _fromField :: Map.Map (Int,Int) Square,
+                     _caputured :: Map.Map Turn [Piece]} deriving Eq -- コモナド?
+
+makeLenses ''Field
 instance Show Square where
   show (Square King Later) = "g王"
   show (Square King First) = " 玉"
@@ -91,6 +91,7 @@ instance Show ChineseNumber where
   show (ChineseNumber 8) = "八"
   show (ChineseNumber 9) = "九"
   show _ = "Supported Kan number is [1-9]."
+
 
 symmetry :: Int -> Int
 symmetry x = 10 - x

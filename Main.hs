@@ -56,7 +56,8 @@ main = do
         Right lr' -> html $ Text.pack lr'
         Left (e::IOException) -> html "File not found."
     get "/shogi" $ do
-      text $ Text.pack $ Shogi.shogiTest
+      Right parsed <- runParserT shogiParser "" "" "shogi 76歩"
+      text $ Text.pack $ {-Shogi.shogiTest <> -}parsed
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body
@@ -167,6 +168,58 @@ sleepParser id_either = do
 
 -- LINE Script
 -- 機能候補: 名前からメッセージを送る機能
+
+chineseNumParser :: (Monad m) => ParsecT String u m Int
+chineseNumParser = do
+  c <- msum $ map char "一二三四五六七八九"
+  return $ case c of
+    '一' -> 1
+    'ニ' -> 2
+    '三' -> 3
+    '四' -> 4
+    '五' -> 5
+    '六' -> 6
+    '七' -> 7
+    '八' -> 8
+    '九' -> 9
+
+pieceParser :: (Monad m) => ParsecT String u m Shogi.Piece
+pieceParser = do
+  nari <- Shogi.Promoted <$ (char '成') <|> return Shogi.Unpromoted
+  str <- msum $ map string ["歩", "香", "香車", "桂", "桂馬", "銀", "金", "玉","王", "飛", "飛車", "角"]
+
+  let unpromoteds = case str of "歩" -> Shogi.Pawn Shogi.Unpromoted
+                                "香" -> Shogi.Lance  Shogi.Unpromoted
+                                "香車" -> Shogi.Lance  Shogi.Unpromoted
+                                "桂" -> Shogi.Knight Shogi.Unpromoted
+                                "桂馬" -> Shogi.Knight Shogi.Unpromoted
+                                "銀" -> Shogi.Silver Shogi.Unpromoted
+                                "金" -> Shogi.Gold
+                                "玉" -> Shogi.King
+                                "王" -> Shogi.King
+                                "飛" -> Shogi.Rook Shogi.Unpromoted
+                                "飛車" -> Shogi.Rook Shogi.Unpromoted
+                                "角" -> Shogi.Bishop Shogi.Unpromoted
+
+  return $ case nari of
+    Shogi.Promoted -> Shogi.promotion unpromoteds
+    Shogi.Unpromoted -> unpromoteds
+
+
+moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
+moveParser = do
+  _ <- string "shogi" <|> string "将棋"
+  skipMany space
+  n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
+  m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
+  piece <- pieceParser
+  isPromoted <- (Shogi.Promoted <$ (char '成')) <|> return Shogi.Unpromoted
+  return $ Shogi.Move piece (n,m) [] isPromoted
+
+shogiParser :: (Monad m) => ParsecT String u m String
+shogiParser = do
+  mv <- moveParser
+  return $ show $ Shogi.move mv Shogi.initialField
 
 lsParser ::  (Monad m) => ParsecT String u m String
 lsParser = Parsec.try $ do
