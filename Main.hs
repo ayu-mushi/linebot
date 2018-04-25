@@ -56,7 +56,7 @@ main = do
         Right lr' -> html $ Text.pack lr'
         Left (e::IOException) -> html "File not found."
     get "/shogi" $ do
-      html $ Text.pack $ show Shogi.initialField
+      text $ Text.pack $ show Shogi.initialField
     post "/callback" $ do
       b <- body
 

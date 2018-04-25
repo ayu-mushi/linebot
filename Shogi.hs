@@ -50,8 +50,8 @@ instance Show Square where
   show (Square pie First) = " " ++ show pie
 
 instance Show Field where
-  show (Field mp) = let showDan dan mp = (showRowGrid [fromMaybe "　" $ fmap show $ (dan, i) `Map.lookup` mp | i <- [1..9]]) ++ " " ++ show (ChineseNumber dan) in
-    showColumnGrid $ (map (showDan `flip` mp) [1..9]) ++ ([showRowGrid $ map (\n -> show n ++ " ") [1..9]])
+  show (Field mp) = let showDan dan mp = (showColumnGrid [fromMaybe "　" $ fmap show $ (dan, i) `Map.lookup` mp | i <- [1..9]]) ++ " " ++ show (ChineseNumber dan) in
+    showRowGrid $ (map (showDan `flip` mp) [1..9]) ++ ([showColumnGrid $ map (\n -> show n ++ " ") [1..9]])
 
 showRowGrid :: [String] -> String
 showRowGrid = foldl (\str strs -> str ++ "|" ++ strs) ""
