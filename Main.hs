@@ -27,6 +27,7 @@ import Network.HTTP.Conduit
 import qualified Codec.Binary.UTF8.String as Codec(encode, decode, encodeString, decodeString)
 import Control.Concurrent (threadDelay)
 import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message), errorMessages)
+import Control.Monad.State(execStateT, runStateT, evalStateT)
 
 import Post as Post
 import Get as Get
@@ -55,7 +56,7 @@ main = do
         Right lr' -> html $ Text.pack lr'
         Left (e::IOException) -> html "File not found."
     get "/shogi" $ do
-      text $ Text.pack $ show Shogi.initialField
+      text $ Text.pack $ Shogi.shogiTest
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body

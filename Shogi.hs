@@ -1,31 +1,43 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, MonadComprehensions, DeriveFunctor, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables#-}
 module Shogi where
 
-import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, insert, lookup, null, empty)
+import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, insert, lookup, null, empty, filter, filterWithKey, delete, keys, (!))
 import Data.Maybe (fromMaybe)
-import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&))
+import Data.Functor(($>), (<$))
+import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&), both, (^.), use, (.=), (%=))
+import Control.Monad (mplus, guard, forM_, MonadPlus, mzero)
+import Control.Monad.State (get, put, StateT(..), State, runStateT, evalStateT)
+import qualified Data.List as List(delete)
+import Data.Monoid((<>))
 
-data Piece =
+data Piece' a =
   King
-  | Pawn Promotion
-  | Knight Promotion
-  | Lance Promotion -- 香車
+  | Pawn a
+  | Knight a
+  | Lance a -- 香車
   | Gold
-  | Silver Promotion
-  | Bishop Promotion
-  | Rook Promotion
-data Promotion = Promoted | Unpromoted
-data Direction = Top | Par | Subtraction | Left | Right
-data Move = Move Piece (Int, Int) Promotion -- 指し手
+  | Silver a
+  | Bishop a
+  | Rook a
+  deriving (Eq, Functor)
 
-data Turn = First | Later -- 手番
+type Piece = Piece' Promotion
 
-data Square = Square {_sqPiece::Piece, _sqTurn :: Turn}
+data Promotion = Promoted | Unpromoted deriving Eq
+data Direction = Top | Par | Subtraction | DirLeft | DirRight deriving Eq
+data Move = Move Piece (Int, Int) [Direction] Promotion deriving Eq -- 指し手
+
+data Turn = First | Later deriving (Eq,Ord) -- 手番
+
+data Square = Square {_sqPiece::Piece, _sqTurn :: Turn} deriving Eq
 
 makeLenses ''Square
 
-newtype Field = Field { fromField :: Map.Map (Int,Int) Square}
+data Field = Field { _fromField :: Map.Map (Int,Int) Square,
+                     _caputured :: Map.Map Turn [Piece]} deriving Eq -- コモナド?
 
+makeLenses ''Field
 
 instance Show Piece where
   show King = "玉"
@@ -50,11 +62,12 @@ instance Show Square where
   show (Square pie First) = " " ++ show pie
 
 instance Show Field where
-  show (Field mp) =
+  show (Field mp captured) =
     let showDan dan mp = (showRowGrid [fromMaybe "　 " $ (i, dan) `Map.lookup` mp | i <- [0..9]])
       in let danScale = fromList [((0, n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
-        in let sujiScale = fromList [((n, 0), show n ++ "　") | n <- [1..9]]-- 目盛り
-          in showColumnGrid $ (map (showDan `flip` (fmap show mp `union` danScale `union` sujiScale)) [0..9])
+        in let (cap::Map (Int, Int) String) = fromList $ [((-1, n), show $ (captured Map.! First) !! n) | n <- [0..(length (captured Map.! First))-1], 0 <= n] <> [((10,n), show $ (captured Map.! Later) !! n) | n <- [0..(length (captured Map.! Later))-1], 0 <= n] --持ち駒
+          in let sujiScale = fromList [((n, 0), show n ++ "　") | n <- [1..9]]-- 目盛り
+            in showColumnGrid $ (map (showDan `flip` (fmap show mp `union` danScale `union` sujiScale `union` cap)) [0..9])
 
 
 showRowGrid :: [String] -> String
@@ -98,7 +111,7 @@ bothSymMap :: Map.Map (Int, Int) Square -> Map.Map (Int, Int) Square
 bothSymMap = foldlWithKey (\xs loc pie -> (insert (fifiPSymmetry loc) (pie & sqTurn .~ First) $ insert loc pie xs)) Map.empty
 
 initialField :: Field
-initialField = Field $ bothSymMap $ pawnList `Map.union` symmetric_part `Map.union` unsym_part
+initialField = Field (bothSymMap $ pawnList `Map.union` symmetric_part `Map.union` unsym_part) $ fromList [(First, []), (Later, [])]
  where
    piece x = Square x Later
    pawnList = fromList $ [((n, 3), piece $ Pawn Unpromoted) | n <- [1..9]]
@@ -115,3 +128,148 @@ initialField = Field $ bothSymMap $ pawnList `Map.union` symmetric_part `Map.uni
      ((2,2), piece $ Bishop Unpromoted)
      ,((8,2), piece $ Rook Unpromoted)
      ]
+
+moveMap :: Ord i => i -> i -> Map.Map i a -> Map.Map i a
+moveMap i j mp = let a = mp ! i in insert j a (Map.delete i mp)
+
+moveMapZero :: (Ord i, MonadPlus m) => i -> i -> Map.Map i a -> m (Map.Map i a)
+moveMapZero i j mp = let x = Map.lookup i mp in
+  case x of
+    Just a -> return $ insert j a (Map.delete i mp)
+    Nothing -> mzero
+
+applyPiece :: PieceM (Int, Int) -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
+applyPiece f = do
+  original_xy <- use _1
+  xy <- f
+  _1 .= xy
+  original_field <- use $ _2 . fromField
+  case Map.lookup xy original_field of
+     Just (Square pie First) -> mzero
+     Just (Square pie Later) -> do
+       field <- moveMapZero original_xy xy original_field
+       _2 %= (\(Field _ cap) -> Field field $ Map.insert First (pie:(cap Map.! First)) cap)
+       return $ Left (pie, xy)
+     Nothing -> do
+       field <- moveMapZero original_xy xy original_field
+       _2 %= (\(Field _ cap) -> Field field cap)
+       return $ Right xy
+
+right1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+right1 = applyPiece [(x-1, y) | (x, y) <- use _1, 0 < x-1]
+
+left1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+left1 = applyPiece [(x+1, y) | (x,y) <- use _1, x+1 <= 9]
+
+up1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+up1 = applyPiece [(x, y-1) | (x, y) <- use _1, 0 < y-1]
+
+down1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+down1 = applyPiece [(x, y+1) | (x, y) <- use _1, y+1 <= 9 ]
+
+moveAll :: PieceM (Either (Piece, (Int, Int)) (Int, Int)) -> PieceM (Int, Int)
+moveAll move1 = moveAll' `mplus` use _1 where
+  moveAll' = do
+    loc2 <- move1
+    case loc2 of
+      Left (pie, xy) -> do
+        _1 .= xy
+        return (xy::(Int, Int))
+      Right xy -> do
+        _1 .= xy
+        moveAll move1
+
+height1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+height1 = up1 `mplus` down1
+
+width1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+width1 = right1 `mplus` left1
+
+corner1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+corner1 = height1 >> width1
+
+cornerAll :: PieceM (Int, Int)
+cornerAll =
+  moveAll (right1 >> up1)
+  `mplus` moveAll (left1 >> up1)
+  `mplus` moveAll (right1 >> down1)
+  `mplus` moveAll (left1 >> down1)
+
+widthAll :: PieceM (Int, Int)
+widthAll = moveAll right1 `mplus` moveAll left1
+
+upAll :: PieceM (Int, Int)
+upAll = moveAll up1
+
+heightAll :: PieceM (Int, Int)
+heightAll = upAll `mplus` moveAll down1
+
+
+type PieceM = StateT ((Int, Int), Field) [] -- 駒モナド
+-- ロールバック
+
+eitherPoint :: Either (Piece, (Int, Int)) (Int, Int) -> (Int, Int)
+eitherPoint = either (^. _2) id
+
+movable :: Piece -> PieceM (Int, Int)
+movable King = do
+  loc1 <- use _1
+  (fmap eitherPoint width1) `mplus` use _1
+  loc2 <- (fmap eitherPoint height1) `mplus` use _1
+  guard (loc1 /= loc2)
+  return loc2
+movable (Rook Unpromoted) = do
+  loc1 <- use _1
+  loc2 <- heightAll `mplus` widthAll
+  guard (loc1 /= loc2)
+  return loc2
+movable (Rook Promoted) = movable (Rook Unpromoted) `mplus` movable King
+movable (Bishop Unpromoted) = do
+  loc1 <- use _1
+  loc2 <- cornerAll
+  guard (loc1 /= loc2)
+  return loc2
+movable (Bishop Promoted) = movable (Bishop Unpromoted) `mplus` movable King
+movable Gold = do
+  (loc1::(Int, Int)) <- use _1
+  (loc2::(Int,Int)) <- (up1 >> ((fmap eitherPoint width1) `mplus` use _1))
+    `mplus` ((fmap eitherPoint width1) `mplus` use _1) `mplus` fmap eitherPoint down1
+  guard (loc1 /= loc2)
+  return loc2
+movable (Silver Unpromoted) = do
+  loc1 <- use _1
+  loc2 <- fmap eitherPoint up1 `mplus` fmap eitherPoint corner1
+  guard (loc1 /= loc2)
+  return loc2
+movable (Silver Promoted) = movable Gold
+movable (Knight Unpromoted) = do
+  loc1 <- use _1
+  loc2 <- [ (x+1, y+3) | (x, y) <- use _1 ] `mplus` [ (x-1, y+3) | (x, y) <- use _1 ]
+  guard (loc1 /= loc2)
+  return loc2
+movable (Knight Promoted) = movable Gold
+movable (Lance Unpromoted) = do
+  loc1 <- use _1
+  loc2 <- upAll
+  guard (loc1 /= loc2)
+  return loc2
+movable (Lance Promoted) = movable Gold
+movable (Pawn Unpromoted) = fmap eitherPoint up1
+movable (Pawn Promoted) = movable Gold
+
+promotion :: Piece -> Piece
+promotion = fmap (const Promoted)
+
+move :: Move -> Field -> Maybe Field
+move (Move pie loc dirs is_prom) field = do
+  let pies = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field
+  case Prelude.filter (\k -> loc `elem` (evalStateT (movable pie) (k, field))) pies of
+    [] -> Nothing
+    (x:xs) -> do
+      return $ Field (insert loc (Square (is_prom <$ pie) First) $ Map.delete x ((^.fromField) field)) (field ^. caputured)
+
+-- 毎回盤をひっくり返すことで手番を表せる
+
+shogiTest :: String
+shogiTest = (show $ Shogi.move (Shogi.Move (Shogi.Rook Shogi.Unpromoted) (3, 8) [] Shogi.Unpromoted) Shogi.initialField)
+        <> "\n" <> (show $ runStateT (Shogi.movable (Shogi.Lance Shogi.Unpromoted)) ((2, 7), initialField))
