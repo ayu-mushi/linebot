@@ -108,10 +108,14 @@ danSymList :: [((Int, Int), Square)] -> [((Int, Int), Square)]
 danSymList = foldl (\xs (loc, pie) -> (danSymmetry loc, pie):((loc, pie):xs)) []
 
 bothSymMap :: Map.Map (Int, Int) Square -> Map.Map (Int, Int) Square
-bothSymMap = foldlWithKey (\xs loc pie -> (insert (fifiPSymmetry loc) (pie & sqTurn .~ First) $ insert loc pie xs)) Map.empty
+bothSymMap = foldlWithKey (\xs loc pie -> insert (fifiPSymmetry loc) (pie & sqTurn %~ turnChange) xs) Map.empty
+
+reverseField :: Field -> Field
+reverseField (Field fie mochi) = Field (foldlWithKey (\xs loc pie -> insert (fifiPSymmetry loc) (pie & sqTurn %~ turnChange) xs) Map.empty fie) $ fromList [(First, mochi Map.! Later), (Later, mochi Map.! First)]
 
 initialField :: Field
-initialField = Field (bothSymMap $ pawnList `Map.union` symmetric_part `Map.union` unsym_part) $ fromList [(First, []), (Later, [])]
+initialField = let later_field = pawnList `Map.union` symmetric_part `Map.union` unsym_part
+                   in Field (later_field `union` bothSymMap later_field) $ fromList [(First, []), (Later, [])]
  where
    piece x = Square x Later
    pawnList = fromList $ [((n, 3), piece $ Pawn Unpromoted) | n <- [1..9]]
@@ -271,6 +275,10 @@ move (Move pie loc dirs is_prom) field =
 
 -- 毎回盤をひっくり返すことで手番を表せる
 
+turnChange :: Turn -> Turn
+turnChange First = Later
+turnChange Later = First
+
 shogiTest :: String
-shogiTest = (show $ Shogi.move (Shogi.Move (Shogi.Rook Shogi.Unpromoted) (3, 8) [] Shogi.Unpromoted) Shogi.initialField)
-        <> "\n" <> (show $ runStateT (Shogi.movable (Shogi.Lance Shogi.Unpromoted)) ((2, 7), initialField))
+shogiTest = (show $ map reverseField $ Shogi.move (Shogi.Move (Shogi.Rook Shogi.Unpromoted) (3, 8) [] Shogi.Unpromoted) $ Shogi.initialField)
+        <> "\n" <> (show $ map (\((x1,y1),fie) -> reverseField fie) $ execStateT (Shogi.movable (Shogi.Lance Shogi.Unpromoted)) ((2, 7), initialField))
