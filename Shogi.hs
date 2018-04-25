@@ -1,8 +1,9 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Shogi where
 
 import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, insert, lookup, null, empty)
 import Data.Maybe (fromMaybe)
-import Control.Lens ((%~), _1, _2)
+import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&))
 
 data Piece =
   King
@@ -19,7 +20,9 @@ data Move = Move Piece (Int, Int) Promotion -- 指し手
 
 data Turn = First | Later -- 手番
 
-data Square = Square Piece Turn
+data Square = Square {_sqPiece::Piece, _sqTurn :: Turn}
+
+makeLenses ''Square
 
 newtype Field = Field { fromField :: Map.Map (Int,Int) Square}
 
@@ -42,15 +45,18 @@ instance Show Piece where
 
 instance Show Square where
   show (Square King Later) = "g王"
-  show (Square King First) = "玉"
+  show (Square King First) = " 玉"
   show (Square pie Later) = "g"++ show pie
-  show (Square pie First) = show pie
+  show (Square pie First) = " " ++ show pie
 
 instance Show Field where
   show (Field mp) = let showDan dan mp = (showRowGrid [fromMaybe "　" $ fmap show $ (dan, i) `Map.lookup` mp | i <- [1..9]]) ++ " " ++ show (ChineseNumber dan) in
-    showColumnGrid $ [show n | n <- [1..9]] ++ map (showDan `flip` mp) [1..9]
+    showColumnGrid $ (map (showDan `flip` mp) [1..9]) ++ ([showRowGrid $ map (\n -> show n ++ " ") [1..9]])
 
+showRowGrid :: [String] -> String
 showRowGrid = foldl (\str strs -> str ++ "|" ++ strs) ""
+
+showColumnGrid :: [String] -> String
 showColumnGrid = foldl
   (\str strs -> strs ++ "\n" ++ replicate (length str) '―' ++ "\n" ++ str)
   ""
@@ -84,7 +90,7 @@ danSymList :: [((Int, Int), Square)] -> [((Int, Int), Square)]
 danSymList = foldl (\xs (loc, pie) -> (danSymmetry loc, pie):((loc, pie):xs)) []
 
 bothSymMap :: Map.Map (Int, Int) Square -> Map.Map (Int, Int) Square
-bothSymMap = foldlWithKey (\xs loc pie -> (insert (fifiPSymmetry loc) pie $ insert loc pie xs)) Map.empty
+bothSymMap = foldlWithKey (\xs loc pie -> (insert (fifiPSymmetry loc) (pie & sqTurn .~ First) $ insert loc pie xs)) Map.empty
 
 initialField :: Field
 initialField = Field $ bothSymMap $ pawnList `Map.union` symmetric_part `Map.union` unsym_part
