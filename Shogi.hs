@@ -50,15 +50,19 @@ instance Show Square where
   show (Square pie First) = " " ++ show pie
 
 instance Show Field where
-  show (Field mp) = let showDan dan mp = (showRowGrid [fromMaybe "　" $ fmap show $ (i, dan) `Map.lookup` mp | i <- [1..9]]) ++ " " ++ show (ChineseNumber dan) in
-    showColumnGrid $ (map (showDan `flip` mp) [1..9]) ++ ([showRowGrid $ map (\n -> show n ++ " ") [1..9]])
+  show (Field mp) =
+    let showDan dan mp = (showRowGrid [fromMaybe "　 " $ (i, dan) `Map.lookup` (fmap show mp) | i <- [1..10]])
+      in let danScale = fromList [((10,n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
+        in let sujiScale = fromList [((n, 0), show n) | n <- [1..9]]-- 目盛り
+          in showColumnGrid $ (map (showDan `flip` (fmap show mp `union` danScale `union` sujiScale)) [0..9])
+
 
 showRowGrid :: [String] -> String
 showRowGrid = foldl (\str strs -> str ++ "|" ++ strs) ""
 
 showColumnGrid :: [String] -> String
 showColumnGrid = foldl
-  (\str strs -> strs ++ "\n" ++ replicate (length str) '―' ++ "\n" ++ str)
+  (\str strs -> str ++ "\n" ++ (replicate 9 '―') ++ "\n" ++ strs)
   ""
 
 newtype ChineseNumber = ChineseNumber { fromChineseNumber :: Int}
@@ -73,6 +77,7 @@ instance Show ChineseNumber where
   show (ChineseNumber 7) = "七"
   show (ChineseNumber 8) = "八"
   show (ChineseNumber 9) = "九"
+  show _ = "Supported Kan number is [1-9]."
 
 symmetry :: Int -> Int
 symmetry x = 10 - x
@@ -108,5 +113,5 @@ initialField = Field $ bothSymMap $ pawnList `Map.union` symmetric_part `Map.uni
      ]
    unsym_part = fromList $ [
      ((2,2), piece $ Bishop Unpromoted)
-     ,((2,8), piece $ Rook Unpromoted)
+     ,((8,2), piece $ Rook Unpromoted)
      ]
