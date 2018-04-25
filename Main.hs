@@ -157,7 +157,7 @@ parrotParser = do
 
 
 sleepParser ::  (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
-sleepParser id_either = do
+sleepParser id_either = Parsec.try $ do
   _ <- msum $ map string ["sleep", "眠れ", "眠る"]
   skipMany space
   numeric <- many1 digit <|> return "10"
@@ -207,7 +207,7 @@ pieceParser = do
 
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
-moveParser = do
+moveParser = Parsec.try $ do
   _ <- string "shogi" <|> string "将棋"
   skipMany space
   n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
