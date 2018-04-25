@@ -131,7 +131,7 @@ mainParser id_either = do
        Left (a::IOException) -> return ()
        Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> shogiParser
   return str
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
