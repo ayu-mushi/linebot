@@ -35,7 +35,6 @@ import qualified Shogi as Shogi
 
 main :: IO ()
 main = do
-  putStrLn $ show Shogi.initialField
   env <- getEnvironment
   let port = maybe 8080 read $ lookup "PORT" env
 
