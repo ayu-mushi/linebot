@@ -26,3 +26,4 @@ executable          ayu-mushi-test
                   , http-conduit
                   , aeson
                   , parsec
+                  , strict

@@ -5,7 +5,8 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid(First(..), (<>))
 import System.Environment
 import System.Directory (removeFile, doesFileExist)
-import System.IO(withFile, openFile, IOMode(ReadWriteMode), hPutStr, hClose, hGetLine)
+import System.IO(withFile, openFile, IOMode(ReadWriteMode), hPutStr, hPutStrLn, hClose, hGetLine)
+import System.IO.Strict as Strict(readFile)
 import Network.HTTP.Types.Status()
 import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict)
@@ -56,9 +57,10 @@ main = do
       case lr of
         Right lr' -> html $ Text.pack lr'
         Left (e::IOException) -> html "File not found."
-    get "/shogi" $ do
-      Right parsed <- runParserT shogiParser "" "" "shogi 58金"
-      text $ Text.pack $ Shogi.shogiTest <> parsed
+    get "/shogi/:move" $ do
+      mv <- param "move"
+      Right parsed <- runParserT shogiParser "" "" $ "shogi " <> mv
+      text $ Text.pack $ {-Shogi.shogiTest -}parsed
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body
@@ -179,22 +181,15 @@ shogiParser = do
 
   str <- (do
     mv <- Shogi.moveParser
-    str <- lift $ liftIO $ withFile "shogi.txt" ReadWriteMode $ \shogi_file -> do
-      (oldField :: [Shogi.Field]) <- (do
-        field <- hGetLine shogi_file
-        if field == ""
-          then throwIO $ userError "Null!"
-          else case reads field of
-                  [] -> error "parse error."
-                  (x:xs) -> return $ fst x
-        ) `catch` (\(e::Control.Exception.SomeException) -> return [Shogi.initialField])
-      let newField = concatMap (Shogi.move mv) oldField
-      hPutStr shogi_file $ show newField
-      return $ concat $ map ((++"\n").Shogi.showField) newField
-    return str
+    !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
+    let old_field = read old_field_str :: [Shogi.Field]
+    let newField = concatMap (Shogi.move mv) old_field
+
+    lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
+    return $ concat $ map ((++"\n").Shogi.showField) newField
     ) <|> (do
       _ <- string "init"
-      lift $ liftIO $ Prelude.writeFile  "shogi.txt" $ show [Shogi.initialField]
+      lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show [Shogi.initialField]
       return $ Shogi.showField Shogi.initialField
       )
   return str
