@@ -176,13 +176,13 @@ down1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 down1 = applyPiece [(x, y+1) | (x, y) <- use _1, y+1 <= 9 ]
 
 vector1 :: (Int, Int) -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
-vector1 (n, m) = applyPiece $ [(x+n, y+m) | (x,y) <- use _1, x+n <= 9, y+m <= 9, 0 < x+n, 0< y+m]
+vector1 (n, m) = applyPiece $ [(x+n, y+m) | (x,y) <- use _1, x+n <= 9, y+m <= 9, 0 < x+n, 0 < y+m]
 
 corner1f :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
-corner1f = vector1 (1, 1) `mplus` vector1 (-1, 1)
+corner1f = vector1 (1, -1) `mplus` vector1 (-1, -1)
 
 corner1b :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
-corner1b = vector1 (1, -1) `mplus` vector1 (-1, -1)
+corner1b = vector1 (1, 1) `mplus` vector1 (-1, 1)
 
 moveAll :: PieceM (Either (Piece, (Int, Int)) (Int, Int)) -> PieceM (Int, Int)
 moveAll move1 = moveAll' `mplus` use _1 where
@@ -258,10 +258,8 @@ movable (Silver Unpromoted) = do
   return loc2
 movable (Silver Promoted) = movable Gold
 movable (Knight Unpromoted) = do
-  loc1 <- use _1
-  loc2 <- fmap eitherPoint $ vector1 (1, 3) `mplus` vector1 (-1, 3)
-  guard (loc1 /= loc2)
-  return loc2
+  loc <- fmap eitherPoint $ vector1 (1, -2) `mplus` vector1 (-1, -2)
+  return loc
 movable (Knight Promoted) = movable Gold
 movable (Lance Unpromoted) = do
   loc1 <- use _1
