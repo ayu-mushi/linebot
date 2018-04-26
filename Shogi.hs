@@ -170,7 +170,7 @@ applyPiece f = do -- 成りを追加
      Just (Square pie Later) -> do
        field <- moveMapZeroProm original_xy xy original_field
                 `mplus` moveMapZero original_xy xy original_field
-       _2 %= (\(Field _ cap) -> Field field $ Map.insert First (pie:(cap Map.! First)) cap)
+       _2 %= (\(Field _ cap) -> Field field $ Map.insert First ((Unpromoted <$ pie):(cap Map.! First)) cap)
 
        let pie = ((field ! xy) ^. sqPiece)
        guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
@@ -399,3 +399,4 @@ moveParser = Parsec.try $ do
 
 -- 成るのと成らないのを非決定的に行う→DONE
 -- 王手判定
+-- TODO: 持ち駒を打つ

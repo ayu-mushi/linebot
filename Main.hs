@@ -30,6 +30,7 @@ import qualified Codec.Binary.UTF8.String as Codec(encode, decode, encodeString,
 import Control.Concurrent (threadDelay)
 import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message), errorMessages)
 import Control.Monad.State(execStateT, runStateT, evalStateT)
+import Data.List(nub)
 
 import Post as Post
 import Get as Get
@@ -183,7 +184,7 @@ shogiParser = do
     mv <- Shogi.moveParser
     !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
     let old_field = read old_field_str :: [Shogi.Field]
-    let newField = concatMap (Shogi.move mv) old_field
+    let newField = nub $ concatMap (Shogi.move mv) old_field
 
     lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
     return $ concat $ map ((++"\n").Shogi.showField) newField
