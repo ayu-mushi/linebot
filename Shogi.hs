@@ -324,7 +324,7 @@ direction :: (Int, Int) -> ((Int, Int), Field) -> Direction -> Bool
 direction original_xy (l, a) (IsPromotion is_prom) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField)))
 direction original_xy (l, a) (ToDir loc) = loc == l
 direction original_xy@(ox,oy) (l@(newx,newy), a) Subtraction = newy > oy
-direction original_xy@(ox,oy) (l@(newx,newy), a) Par = newy == oy
+direction original_xy@(ox,oy) (l@(newx,newy), a) Par = newy == oy && abs (newx - ox) == 1
 direction original_xy@(ox,oy) (l@(newx,newy), a) Top = newy < oy
 direction original_xy@(ox,oy) (l@(newx,newy), a) DirRight = newx > ox
 direction original_xy@(ox,oy) (l@(newx,newy), a) DirLeft = ox > newx
