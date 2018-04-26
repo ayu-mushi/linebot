@@ -308,7 +308,7 @@ promotion = (Promoted <$)
 moveFrom :: (Int, Int) -> [Direction] -> Field -> [Field]
 moveFrom i@(ix, iy) dirs field@(Field mp cap) =
   let (ex::[((Int,Int),Field)]) = Prelude.filter
-                                    (\(l,a) -> directions dirs (l, a)) $ execStateT (movable ((mp ! i)^. sqPiece)) (i, field)
+                                    (\(l,a) -> directions i (l, a) dirs) $ execStateT (movable ((mp ! i)^. sqPiece)) (i, field)
                                     in map reverseField $ map (^. _2) ex
 
 -- TODO: 持ち駒を打つ mplus
@@ -317,15 +317,15 @@ move (Move pie dirs) field =
   let (pies::[(Int,Int)]) = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
   let (ex::[((Int,Int),Field)]) = concatMap
                                   (\k -> Prelude.filter
-                                    (\(l,a) -> directions dirs (l, a)) $ execStateT (movable pie) (k, field)) pies
+                                    (\(l,a) -> directions k (l, a) dirs) $ execStateT (movable pie) (k, field)) pies
                                     in map reverseField $ map (^. _2) ex
 
-direction :: Direction -> ((Int, Int), Field) -> Bool
-direction (IsPromotion is_prom) (l, a) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField)))
-direction (ToDir loc) (l, a) = loc == l
+direction :: (Int, Int) -> ((Int, Int), Field) -> Direction -> Bool
+direction original_xy (l, a) (IsPromotion is_prom) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField)))
+direction original_xy (l, a) (ToDir loc) = loc == l
 
-directions :: [Direction] -> ((Int, Int), Field) -> Bool
-directions dirs fields = foldl (&&) True $ map (`direction` fields) dirs
+directions :: (Int, Int) -> ((Int, Int), Field) -> [Direction] -> Bool
+directions original_xy fields dirs = foldl (&&) True $ map (direction original_xy fields) dirs
 
 isPromoted :: Piece -> Promotion
 isPromoted King = Unpromoted
