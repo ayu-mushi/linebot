@@ -1,10 +1,11 @@
-{-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase, DoAndIfThenElse #-}
+{-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase, DoAndIfThenElse, BangPatterns#-}
 
 import Web.Scotty as Scotty
 import Data.Maybe (fromMaybe)
 import Data.Monoid(First(..), (<>))
 import System.Environment
 import System.Directory (removeFile, doesFileExist)
+import System.IO(withFile, openFile, IOMode(ReadWriteMode), hPutStr, hClose, hGetLine)
 import Network.HTTP.Types.Status()
 import System.Random
 import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict)
@@ -14,7 +15,7 @@ import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, 
 import qualified Data.ByteString as BSStrict (ByteString, pack, unpack)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO, lift, MonadIO)
-import Control.Exception (try, IOException)
+import Control.Exception (try, IOException, SomeException, throwIO)
 import Control.Monad (mplus, mzero, MonadPlus, msum)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
@@ -56,8 +57,8 @@ main = do
         Right lr' -> html $ Text.pack lr'
         Left (e::IOException) -> html "File not found."
     get "/shogi" $ do
-      Right parsed <- runParserT shogiParser "" "" "shogi 76歩"
-      text $ Text.pack $ {-Shogi.shogiTest <> -}parsed
+      Right parsed <- runParserT shogiParser "" "" "shogi 58金"
+      text $ Text.pack $ Shogi.shogiTest <> parsed
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body
@@ -169,57 +170,24 @@ sleepParser id_either = Parsec.try $ do
 -- LINE Script
 -- 機能候補: 名前からメッセージを送る機能
 
-chineseNumParser :: (Monad m) => ParsecT String u m Int
-chineseNumParser = do
-  c <- msum $ map char "一二三四五六七八九"
-  return $ case c of
-    '一' -> 1
-    'ニ' -> 2
-    '三' -> 3
-    '四' -> 4
-    '五' -> 5
-    '六' -> 6
-    '七' -> 7
-    '八' -> 8
-    '九' -> 9
-
-pieceParser :: (Monad m) => ParsecT String u m Shogi.Piece
-pieceParser = do
-  nari <- Shogi.Promoted <$ (char '成') <|> return Shogi.Unpromoted
-  str <- msum $ map string ["歩", "香", "香車", "桂", "桂馬", "銀", "金", "玉","王", "飛", "飛車", "角"]
-
-  let unpromoteds = case str of "歩" -> Shogi.Pawn Shogi.Unpromoted
-                                "香" -> Shogi.Lance  Shogi.Unpromoted
-                                "香車" -> Shogi.Lance  Shogi.Unpromoted
-                                "桂" -> Shogi.Knight Shogi.Unpromoted
-                                "桂馬" -> Shogi.Knight Shogi.Unpromoted
-                                "銀" -> Shogi.Silver Shogi.Unpromoted
-                                "金" -> Shogi.Gold
-                                "玉" -> Shogi.King
-                                "王" -> Shogi.King
-                                "飛" -> Shogi.Rook Shogi.Unpromoted
-                                "飛車" -> Shogi.Rook Shogi.Unpromoted
-                                "角" -> Shogi.Bishop Shogi.Unpromoted
-
-  return $ case nari of
-    Shogi.Promoted -> Shogi.promotion unpromoteds
-    Shogi.Unpromoted -> unpromoteds
 
 
-moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
-moveParser = Parsec.try $ do
-  _ <- string "shogi" <|> string "将棋"
-  skipMany space
-  n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
-  m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
-  piece <- pieceParser
-  isPromoted <- (Shogi.Promoted <$ (char '成')) <|> return Shogi.Unpromoted
-  return $ Shogi.Move piece (n,m) [] isPromoted
-
-shogiParser :: (Monad m) => ParsecT String u m String
+shogiParser :: (MonadIO m) => ParsecT String u m String
 shogiParser = do
-  mv <- moveParser
-  return $ show $ Shogi.move mv Shogi.initialField
+  mv <- Shogi.moveParser
+  str <- lift $ liftIO $ withFile "shogi.txt" ReadWriteMode $ \shogi_file -> do
+    (oldField :: [Shogi.Field]) <- (do
+      field <- hGetLine shogi_file
+      if field == ""
+        then throwIO $ userError "Null!"
+        else case reads field of
+                [] -> throwIO $ userError "No parse!"
+                (x:xs) -> return $ fst x
+      ) `catch` (\(e::Control.Exception.SomeException) -> return [Shogi.initialField])
+    let newField = concatMap (Shogi.move mv) oldField
+    hPutStr shogi_file $ show newField
+    return $ concat $ map ((++"\n").Shogi.showField) newField
+  return str
 
 lsParser ::  (Monad m) => ParsecT String u m String
 lsParser = Parsec.try $ do

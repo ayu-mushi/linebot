@@ -6,10 +6,11 @@ import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, 
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Functor(($>), (<$))
 import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&), both, (^.), use, (.=), (%=))
-import Control.Monad (mplus, guard, forM_, MonadPlus, mzero)
+import Control.Monad (mplus, guard, forM_, MonadPlus, mzero, msum)
 import Control.Monad.State (get, put, StateT(..), State, runStateT, evalStateT, execStateT)
 import qualified Data.List as List(delete)
 import Data.Monoid((<>))
+import Text.Parsec as Parsec
 
 data Piece' a =
   King
@@ -20,54 +21,56 @@ data Piece' a =
   | Silver a
   | Bishop a
   | Rook a
-  deriving (Eq, Functor)
+  deriving (Eq, Functor, Read, Show)
 
 type Piece = Piece' Promotion
 
-instance Show Piece where
-  show King = "玉"
-  show Gold = "金"
-  show (Silver Unpromoted) = "銀"
-  show (Silver Promoted) = "全"
-  show (Knight Unpromoted) = "桂"
-  show (Knight Promoted) = "圭"
-  show (Lance Unpromoted) = "香"
-  show (Lance Promoted) = "杏"
-  show (Pawn Unpromoted) = "歩"
-  show (Pawn Promoted) = "と"
-  show (Rook Unpromoted) = "飛"
-  show (Rook Promoted) = "竜"
-  show (Bishop Unpromoted) = "角"
-  show (Bishop Promoted) = "馬"
+showPiece :: Piece -> String
+showPiece King = "玉"
+showPiece Gold = "金"
+showPiece (Silver Unpromoted) = "銀"
+showPiece (Silver Promoted) = "全"
+showPiece (Knight Unpromoted) = "桂"
+showPiece (Knight Promoted) = "圭"
+showPiece (Lance Unpromoted) = "香"
+showPiece (Lance Promoted) = "杏"
+showPiece (Pawn Unpromoted) = "歩"
+showPiece (Pawn Promoted) = "と"
+showPiece (Rook Unpromoted) = "飛"
+showPiece (Rook Promoted) = "竜"
+showPiece (Bishop Unpromoted) = "角"
+showPiece (Bishop Promoted) = "馬"
 
+data Promotion = Promoted | Unpromoted deriving (Eq,Show,Read)
+data Direction = Top | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show,Read)
+data Move = Move Piece (Int, Int) [Direction] Promotion deriving (Eq,Show,Read) -- 指し手
 
-data Promotion = Promoted | Unpromoted deriving (Eq,Show)
-data Direction = Top | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show)
-data Move = Move Piece (Int, Int) [Direction] Promotion deriving (Eq,Show) -- 指し手
+data Turn = First | Later deriving (Eq,Ord,Read,Show) -- 手番
 
-data Turn = First | Later deriving (Eq,Ord) -- 手番
-
-data Square = Square {_sqPiece::Piece, _sqTurn :: Turn} deriving Eq
+data Square = Square {_sqPiece::Piece, _sqTurn :: Turn} deriving (Eq,Read,Show)
 
 makeLenses ''Square
 
 data Field = Field { _fromField :: Map.Map (Int,Int) Square,
-                     _caputured :: Map.Map Turn [Piece]} deriving Eq -- コモナド?
+                     _caputured :: Map.Map Turn [Piece]} deriving (Eq,Show,Read) -- コモナド?
 
 makeLenses ''Field
-instance Show Square where
-  show (Square King Later) = "g王"
-  show (Square King First) = " 玉"
-  show (Square pie Later) = "g"++ show pie
-  show (Square pie First) = " " ++ show pie
 
-instance Show Field where
-  show (Field mp captured) =
+
+showSquare :: Square -> String
+showSquare (Square King Later) = "g王"
+showSquare (Square King First) = " 玉"
+showSquare (Square pie Later) = "g"++ showPiece pie
+showSquare (Square pie First) = " " ++ showPiece pie
+
+
+showField :: Field -> String
+showField (Field mp captured) =
     let showDan dan mp = (showRowGrid [fromMaybe "　 " $ (i, dan) `Map.lookup` mp | i <- [-1..10]])
       in let danScale = fromList [((0, n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
-        in let (cap::Map (Int, Int) String) = fromList $ [((-1, n), show $ (captured Map.! First) !! n) | n <- [0..(length (captured Map.! First))-1], 0 <= n] <> [((10,n), show $ (captured Map.! Later) !! n) | n <- [0..(length (captured Map.! Later))-1], 0 <= n] --持ち駒
+        in let (cap::Map (Int, Int) String) = fromList $ [((-1, n), showPiece $ (captured Map.! First) !! n) | n <- [0..(length (captured Map.! First))-1], 0 <= n] <> [((10,n), showPiece $ (captured Map.! Later) !! n) | n <- [0..(length (captured Map.! Later))-1], 0 <= n] --持ち駒
           in let sujiScale = fromList [((n, 0), show n ++ "　") | n <- [1..9]]-- 目盛り
-            in showColumnGrid $ (map (showDan `flip` (fmap show mp `union` danScale `union` sujiScale `union` cap)) [0..9])
+            in showColumnGrid $ (map (showDan `flip` (fmap showSquare mp `union` danScale `union` sujiScale `union` cap)) [0..9])
 
 
 showRowGrid :: [String] -> String
@@ -75,7 +78,7 @@ showRowGrid = foldl (\str strs -> strs ++ "|" ++ str) ""
 
 showColumnGrid :: [String] -> String
 showColumnGrid = foldl
-  (\str strs -> str ++ "\n" ++ ("   " ++ replicate (9*4) '―') ++ "\n" ++ strs)
+  (\str strs -> str ++ "\n" ++ ("   " ++ replicate (9*2) '―') ++ "\n" ++ strs)
   ""
 
 newtype ChineseNumber = ChineseNumber { fromChineseNumber :: Int}
@@ -219,8 +222,8 @@ eitherPoint = either (^. _2) id
 movable :: Piece -> PieceM (Int, Int)
 movable King = do
   loc1 <- use _1
-  (fmap eitherPoint width1) `mplus` use _1
-  loc2 <- (fmap eitherPoint height1) `mplus` use _1
+  ((fmap eitherPoint height1) `mplus` return loc1)
+  loc2 <- (fmap eitherPoint width1) `mplus` use _1
   guard (loc1 /= loc2)
   return loc2
 movable (Rook Unpromoted) = do
@@ -268,8 +271,8 @@ promotion = (Promoted <$)
 move :: Move -> Field -> [Field]
 move (Move pie loc dirs is_prom) field =
   let pies = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
-  let ex = mapMaybe (\k -> if loc `elem` (evalStateT (movable pie) (k, field)) then Just $ head $ Prelude.filter (\(l,_) -> l == loc) $ execStateT (movable pie) (k, field) else (Nothing::Maybe ((Int,Int), Field))) pies in
-  case ex of
+  let ex = mapMaybe (\k -> if loc `elem` (map (^._1) $ execStateT (movable pie) (k, field)) then Just $ head $ Prelude.filter (\(l,_) -> l == loc) $ execStateT (movable pie) (k, field) else (Nothing::Maybe ((Int,Int), Field))) pies in
+  map reverseField $ case ex of
     [] -> []
     xs -> map (^. _2) xs
 
@@ -281,5 +284,55 @@ turnChange First = Later
 turnChange Later = First
 
 shogiTest :: String
-shogiTest = (show $ map reverseField $ Shogi.move (Shogi.Move (Shogi.Rook Shogi.Unpromoted) (3, 8) [] Shogi.Unpromoted) $ Shogi.initialField)
-        <> "\n" <> (show $ map (\((x1,y1),fie) -> reverseField fie) $ execStateT (Shogi.movable (Shogi.Lance Shogi.Unpromoted)) ((2, 7), initialField))
+shogiTest = (concat $ map showField $ Shogi.move (Shogi.Move (Shogi.King) (4, 8) [] Shogi.Unpromoted) $ Shogi.initialField)
+        <> "\n" <> (concat $ map showField $ map (\((x1,y1),fie) -> fie) $ execStateT (Shogi.movable (Shogi.Lance Shogi.Unpromoted)) ((2, 7), initialField))
+        <> "\n" <> (concat $ map (showField . (^._2)) $ execStateT (Shogi.movable King) ((5, 9), head $ move (Shogi.Move Gold (5, 8) [] Shogi.Unpromoted) $ head $ move (Shogi.Move Gold (5, 8) [] Shogi.Unpromoted) $ initialField))
+
+-- TODO: 斜めの動きがおかしい
+--
+chineseNumParser :: (Monad m) => ParsecT String u m Int
+chineseNumParser = do
+  c <- msum $ map char "一二三四五六七八九"
+  return $ case c of
+    '一' -> 1
+    'ニ' -> 2
+    '三' -> 3
+    '四' -> 4
+    '五' -> 5
+    '六' -> 6
+    '七' -> 7
+    '八' -> 8
+    '九' -> 9
+
+pieceParser :: (Monad m) => ParsecT String u m Shogi.Piece
+pieceParser = do
+  nari <- Shogi.Promoted <$ (char '成') <|> return Shogi.Unpromoted
+  str <- msum $ map string ["歩", "香", "香車", "桂", "桂馬", "銀", "金", "玉","王", "飛", "飛車", "角"]
+
+  let unpromoteds = case str of "歩" -> Shogi.Pawn Shogi.Unpromoted
+                                "香" -> Shogi.Lance  Shogi.Unpromoted
+                                "香車" -> Shogi.Lance  Shogi.Unpromoted
+                                "桂" -> Shogi.Knight Shogi.Unpromoted
+                                "桂馬" -> Shogi.Knight Shogi.Unpromoted
+                                "銀" -> Shogi.Silver Shogi.Unpromoted
+                                "金" -> Shogi.Gold
+                                "玉" -> Shogi.King
+                                "王" -> Shogi.King
+                                "飛" -> Shogi.Rook Shogi.Unpromoted
+                                "飛車" -> Shogi.Rook Shogi.Unpromoted
+                                "角" -> Shogi.Bishop Shogi.Unpromoted
+
+  return $ case nari of
+    Shogi.Promoted -> Shogi.promotion unpromoteds
+    Shogi.Unpromoted -> unpromoteds
+
+
+moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
+moveParser = Parsec.try $ do
+  _ <- string "shogi" <|> string "将棋"
+  skipMany space
+  n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
+  m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
+  piece <- pieceParser
+  isPromoted <- (Shogi.Promoted <$ (char '成')) <|> (Shogi.Unpromoted <$ (string "不成")) <|> return Shogi.Unpromoted
+  return $ Shogi.Move piece (n,m) [] isPromoted
