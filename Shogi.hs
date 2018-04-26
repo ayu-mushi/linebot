@@ -323,6 +323,11 @@ move (Move pie dirs) field =
 direction :: (Int, Int) -> ((Int, Int), Field) -> Direction -> Bool
 direction original_xy (l, a) (IsPromotion is_prom) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField)))
 direction original_xy (l, a) (ToDir loc) = loc == l
+direction original_xy@(ox,oy) (l@(newx,newy), a) Subtraction = newy > oy
+direction original_xy@(ox,oy) (l@(newx,newy), a) Par = newy == oy
+direction original_xy@(ox,oy) (l@(newx,newy), a) Top = newy < oy
+direction original_xy@(ox,oy) (l@(newx,newy), a) DirRight = newx > ox
+direction original_xy@(ox,oy) (l@(newx,newy), a) DirLeft = ox > newx
 
 directions :: (Int, Int) -> ((Int, Int), Field) -> [Direction] -> Bool
 directions original_xy fields dirs = foldl (&&) True $ map (direction original_xy fields) dirs
@@ -395,14 +400,16 @@ pieceParser = do
     Shogi.Promoted -> Shogi.promotion unpromoteds
     Shogi.Unpromoted -> unpromoteds
 
+dirParser :: (Monad m) => ParsecT String u m Direction
+dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ string "上") <|> (DirRight <$ string "右") <|> (DirLeft <$ string "左") <|> (IsPromotion Shogi.Unpromoted <$ (string "不成")) <|> (IsPromotion Shogi.Promoted <$ (char '成'))
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = Parsec.try $ do
   n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
-  isPromoted <- ([IsPromotion Shogi.Promoted] <$ (char '成')) <|> ([IsPromotion Shogi.Unpromoted] <$ (string "不成")) <|> ([] <$ (return ""))
-  return $ Shogi.Move piece $ [ToDir (n,m)] <> isPromoted
+  dirs <- many dirParser
+  return $ Shogi.Move piece $ (ToDir (n,m)):dirs
 
 -- 成るのと成らないのを非決定的に行う→DONE
 -- 王手判定
