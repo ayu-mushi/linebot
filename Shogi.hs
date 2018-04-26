@@ -175,6 +175,15 @@ up1 = applyPiece [(x, y-1) | (x, y) <- use _1, 0 < y-1]
 down1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 down1 = applyPiece [(x, y+1) | (x, y) <- use _1, y+1 <= 9 ]
 
+vector1 :: (Int, Int) -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
+vector1 (n, m) = applyPiece $ [(x+n, y+m) | (x,y) <- use _1, x+n <= 9, y+n <= 9, 0 <x+n, 0<y+n]
+
+corner1f :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+corner1f = vector1 (1, 1) `mplus` vector1 (-1, 1)
+
+corner1b :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
+corner1b = vector1 (1, -1) `mplus` vector1 (-1, -1)
+
 moveAll :: PieceM (Either (Piece, (Int, Int)) (Int, Int)) -> PieceM (Int, Int)
 moveAll move1 = moveAll' `mplus` use _1 where
   moveAll' = do
@@ -194,14 +203,14 @@ width1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 width1 = right1 `mplus` left1
 
 corner1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
-corner1 = height1 >> width1
+corner1 = corner1f `mplus` corner1b
 
 cornerAll :: PieceM (Int, Int)
 cornerAll =
-  moveAll (right1 >> up1)
-  `mplus` moveAll (left1 >> up1)
-  `mplus` moveAll (right1 >> down1)
-  `mplus` moveAll (left1 >> down1)
+  moveAll (vector1 (1, 1))
+  `mplus` moveAll (vector1 (1, -1))
+  `mplus` moveAll (vector1 (-1, 1))
+  `mplus` moveAll (vector1 (-1, -1))
 
 widthAll :: PieceM (Int, Int)
 widthAll = moveAll right1 `mplus` moveAll left1
@@ -222,8 +231,7 @@ eitherPoint = either (^. _2) id
 movable :: Piece -> PieceM (Int, Int)
 movable King = do
   loc1 <- use _1
-  ((fmap eitherPoint height1) `mplus` return loc1)
-  loc2 <- (fmap eitherPoint width1) `mplus` use _1
+  loc2 <- (fmap eitherPoint width1) `mplus` (fmap eitherPoint height1) `mplus` (fmap eitherPoint corner1)
   guard (loc1 /= loc2)
   return loc2
 movable (Rook Unpromoted) = do
@@ -240,8 +248,7 @@ movable (Bishop Unpromoted) = do
 movable (Bishop Promoted) = movable (Bishop Unpromoted) `mplus` movable King
 movable Gold = do
   (loc1::(Int, Int)) <- use _1
-  (loc2::(Int,Int)) <- (up1 >> ((fmap eitherPoint width1) `mplus` use _1))
-    `mplus` ((fmap eitherPoint width1) `mplus` use _1) `mplus` fmap eitherPoint down1
+  (loc2::(Int,Int)) <- (fmap eitherPoint width1) `mplus` (fmap eitherPoint height1) `mplus` (fmap eitherPoint corner1f)
   guard (loc1 /= loc2)
   return loc2
 movable (Silver Unpromoted) = do
@@ -252,7 +259,7 @@ movable (Silver Unpromoted) = do
 movable (Silver Promoted) = movable Gold
 movable (Knight Unpromoted) = do
   loc1 <- use _1
-  loc2 <- [ (x+1, y+3) | (x, y) <- use _1 ] `mplus` [ (x-1, y+3) | (x, y) <- use _1 ]
+  loc2 <- fmap eitherPoint $ vector1 (1, 3) `mplus` vector1 (-1, 3)
   guard (loc1 /= loc2)
   return loc2
 movable (Knight Promoted) = movable Gold
@@ -307,7 +314,7 @@ chineseNumParser = do
 pieceParser :: (Monad m) => ParsecT String u m Shogi.Piece
 pieceParser = do
   nari <- Shogi.Promoted <$ (char '成') <|> return Shogi.Unpromoted
-  str <- msum $ map string ["歩", "香", "香車", "桂", "桂馬", "銀", "金", "玉","王", "飛", "飛車", "角"]
+  str <- msum $ map string ["歩", "香", "香車", "桂", "桂馬", "銀", "金", "玉","王", "飛", "飛車", "角", "竜", "馬", "と金", "と"]
 
   let unpromoteds = case str of "歩" -> Shogi.Pawn Shogi.Unpromoted
                                 "香" -> Shogi.Lance  Shogi.Unpromoted
@@ -321,6 +328,10 @@ pieceParser = do
                                 "飛" -> Shogi.Rook Shogi.Unpromoted
                                 "飛車" -> Shogi.Rook Shogi.Unpromoted
                                 "角" -> Shogi.Bishop Shogi.Unpromoted
+                                "竜" -> Shogi.Rook Shogi.Promoted
+                                "馬" -> Shogi.Bishop Shogi.Promoted
+                                "と金" -> Shogi.Pawn Shogi.Promoted
+                                "と" -> Shogi.Pawn Shogi.Promoted
 
   return $ case nari of
     Shogi.Promoted -> Shogi.promotion unpromoteds
