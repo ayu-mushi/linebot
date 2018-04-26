@@ -42,9 +42,8 @@ showPiece (Bishop Unpromoted) = "角"
 showPiece (Bishop Promoted) = "馬"
 
 data Promotion = Promoted | Unpromoted deriving (Eq,Show,Read)
-data Direction = Top | Par | Subtraction | DirLeft | DirRight | IsPromotion Promotion deriving (Eq,Show,Read)
+data Direction = ToDir (Int,Int) | IsPromotion Promotion | Top | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show,Read)
 data Move = Move { _movPiece :: Piece
-                  , _movLoc :: (Int, Int)
                   ,_movDirs :: [Direction]
                   } deriving (Eq,Show,Read) -- 指し手
 
@@ -304,11 +303,11 @@ promotion = (Promoted <$)
 --mapM (a -> [b]) -> [a] -> [[b]]
 
 move :: Move -> Field -> [Field]
-move (Move pie loc dirs) field =
+move (Move pie dirs) field =
   let pies = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
   let (ex::[((Int,Int),Field)]) = concatMap
                                   (\k -> Prelude.filter
-                                    (\(l,a) -> l == loc && directions dirs (l, a)) $ execStateT (movable pie) (k, field)) pies in
+                                    (\(l,a) -> directions dirs (l, a)) $ execStateT (movable pie) (k, field)) pies in
 
   map reverseField $ case ex of
     [] -> []
@@ -316,6 +315,7 @@ move (Move pie loc dirs) field =
 
 direction :: Direction -> ((Int, Int), Field) -> Bool
 direction (IsPromotion is_prom) (l, a) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField)))
+direction (ToDir loc) (l, a) = loc == l
 
 directions :: [Direction] -> ((Int, Int), Field) -> Bool
 directions dirs fields = foldl (&&) True $ map (`direction` fields) dirs
@@ -342,10 +342,11 @@ turnChange :: Turn -> Turn
 turnChange First = Later
 turnChange Later = First
 
-shogiTest :: String
+{-shogiTest :: String
 shogiTest = (concat $ map showField $ Shogi.move (Shogi.Move (Shogi.King) (4, 8) []) $ Shogi.initialField)
         <> "\n" <> (concat $ map showField $ map (\((x1,y1),fie) -> fie) $ execStateT (Shogi.movable (Shogi.Lance Shogi.Unpromoted)) ((2, 7), initialField))
         <> "\n" <> (concat $ map (showField . (^._2)) $ execStateT (Shogi.movable King) ((5, 9), head $ move (Shogi.Move Gold (5, 8) []) $ head $ move (Shogi.Move Gold (5, 8) []) $ initialField))
+-}
 
 chineseNumParser :: (Monad m) => ParsecT String u m Int
 chineseNumParser = do
@@ -394,7 +395,7 @@ moveParser = Parsec.try $ do
   m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
   isPromoted <- ([IsPromotion Shogi.Promoted] <$ (char '成')) <|> ([IsPromotion Shogi.Unpromoted] <$ (string "不成")) <|> ([] <$ (return ""))
-  return $ Shogi.Move piece (n,m) isPromoted
+  return $ Shogi.Move piece $ [ToDir (n,m)] <> isPromoted
 
 -- 成るのと成らないのを非決定的に行う→DONE
 -- 王手判定
