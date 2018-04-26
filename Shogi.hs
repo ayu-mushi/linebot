@@ -165,17 +165,26 @@ applyPiece f = do -- 成りを追加
   xy <- f
   _1 .= xy
   original_field <- use $ _2 . fromField
+
   case Map.lookup xy original_field of
      Just (Square pie First) -> mzero
      Just (Square pie Later) -> do
        field <- moveMapZeroProm original_xy xy original_field
                 `mplus` moveMapZero original_xy xy original_field
        _2 %= (\(Field _ cap) -> Field field $ Map.insert First (pie:(cap Map.! First)) cap)
+
+       let pie = ((field ! xy) ^. sqPiece)
+       guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
+       guard (2 <= xy^._2 || (pie /= Knight Unpromoted))
        return $ Left (pie, xy)
      Nothing -> do
        field <- moveMapZeroProm original_xy xy original_field
                 `mplus` moveMapZero original_xy xy original_field
        _2 %= (\(Field _ cap) -> Field field cap)
+
+       let pie = ((field ! xy) ^. sqPiece)
+       guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
+       guard (2 <= xy^._2 || (pie /= Knight Unpromoted))
        return $ Right xy
 
 right1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
@@ -384,7 +393,7 @@ moveParser = Parsec.try $ do
   n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
-  isPromoted <- ([IsPromotion Shogi.Promoted] <$ (char '成')) <|> ([IsPromotion Shogi.Unpromoted] <$ (string "不成")) <|> ([IsPromotion Shogi.Unpromoted] <$ (return ""))
+  isPromoted <- ([IsPromotion Shogi.Promoted] <$ (char '成')) <|> ([IsPromotion Shogi.Unpromoted] <$ (string "不成")) <|> ([] <$ (return ""))
   return $ Shogi.Move piece (n,m) isPromoted
 
 -- 成るのと成らないのを非決定的に行う→DONE
