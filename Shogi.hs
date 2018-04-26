@@ -42,7 +42,7 @@ showPiece (Bishop Unpromoted) = "角"
 showPiece (Bishop Promoted) = "馬"
 
 data Promotion = Promoted | Unpromoted deriving (Eq,Show,Read)
-data Direction = ToDir (Int,Int) | IsPromotion Promotion | Top | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show,Read)
+data Direction = ToDir (Int,Int) | IsPromotion Promotion | Top | DirectUp | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show,Read)
 data Move = Move { _movPiece :: Piece
                   ,_movDirs :: [Direction]
                   } deriving (Eq,Show,Read) -- 指し手
@@ -328,6 +328,7 @@ direction original_xy@(ox,oy) (l@(newx,newy), a) Par = newy == oy
 direction original_xy@(ox,oy) (l@(newx,newy), a) Top = newy < oy
 direction original_xy@(ox,oy) (l@(newx,newy), a) DirRight = newx > ox
 direction original_xy@(ox,oy) (l@(newx,newy), a) DirLeft = ox > newx
+direction original_xy@(ox,oy) (l@(newx,newy), a) DirectUp = ox == newx && newy < oy
 
 directions :: (Int, Int) -> ((Int, Int), Field) -> [Direction] -> Bool
 directions original_xy fields dirs = foldl (&&) True $ map (direction original_xy fields) dirs
@@ -401,7 +402,7 @@ pieceParser = do
     Shogi.Unpromoted -> unpromoteds
 
 dirParser :: (Monad m) => ParsecT String u m Direction
-dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ string "上") <|> (DirRight <$ string "右") <|> (DirLeft <$ string "左") <|> (IsPromotion Shogi.Unpromoted <$ (string "不成")) <|> (IsPromotion Shogi.Promoted <$ (char '成'))
+dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ string "上") <|> (DirRight <$ string "右") <|> (DirLeft <$ string "左") <|> (IsPromotion Shogi.Unpromoted <$ (string "不成")) <|> (IsPromotion Shogi.Promoted <$ (char '成')) <|> (DirectUp <$ (char '直'))
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = Parsec.try $ do
