@@ -193,8 +193,12 @@ shogiParser = do
       return $ Shogi.showField Shogi.initialField
       ) <|> (do
       _ <- string "display"
-      !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
-      return $ concatMap ((++"\n").Shogi.showField) $ (read old_field_str :: [Shogi.Field])
+      skipMany space
+      !(old_field::[Shogi.Field]) <-  (do
+        _ <- string "reverse"
+        fmap (map Shogi.reverseField) $ fmap read $ lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])) <|> (fmap read $ lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField]))
+
+      return $ concatMap ((++"\n").Shogi.showField) $ (old_field :: [Shogi.Field])
       )
   return str
 
@@ -294,6 +298,6 @@ helpParser = Parsec.try $ do
   \ \n「sleep [0-9]+」:  数字の部分を自然数として解釈し、その秒数(デフォルト: 10)の間死にます。\
   \ \n(オウム)|(parrot)|鏡|(mirror)|(エコー)|(echo): オウム返しします。\
   \ \n(shogi)|(将棋) init: 将棋を最初からします。\
-  \ \n(shogi)|(将棋) display: 将棋の現状態を表示します。\
+  \ \n(shogi)|(将棋) display: 将棋の現状態を表示します。option: reverse 反転して表示します。\
   \ \n(shogi)|(将棋) [1-9][一-九][歩銀王..]: 駒を動かします。\
   \"
