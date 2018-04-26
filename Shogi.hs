@@ -406,12 +406,14 @@ dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ 
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = Parsec.try $ do
+  f <- (Shogi.fifiPSymmetry <$ char '△') <|> (id <$ char '▲') <|> (id <$ return "")
   n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
   dirs <- many dirParser
-  return $ Shogi.Move piece $ (ToDir (n,m)):dirs
+  return $ Shogi.Move piece $ (ToDir $ f (n,m)):dirs
 
 -- 成るのと成らないのを非決定的に行う→DONE
 -- 王手判定
 -- TODO: 持ち駒を打つ
+-- △で反転
