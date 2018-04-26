@@ -176,7 +176,7 @@ down1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 down1 = applyPiece [(x, y+1) | (x, y) <- use _1, y+1 <= 9 ]
 
 vector1 :: (Int, Int) -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
-vector1 (n, m) = applyPiece $ [(x+n, y+m) | (x,y) <- use _1, x+n <= 9, y+n <= 9, 0 <x+n, 0<y+n]
+vector1 (n, m) = applyPiece $ [(x+n, y+m) | (x,y) <- use _1, x+n <= 9, y+m <= 9, 0 < x+n, 0< y+m]
 
 corner1f :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 corner1f = vector1 (1, 1) `mplus` vector1 (-1, 1)
