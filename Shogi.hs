@@ -302,16 +302,23 @@ promotion = (Promoted <$)
 --filterM :: (a -> [Bool]) -> [a] -> [[a]]
 --mapM (a -> [b]) -> [a] -> [[b]]
 
+
+-- moveFrom
+
+moveFrom :: (Int, Int) -> [Direction] -> Field -> [Field]
+moveFrom i@(ix, iy) dirs field@(Field mp cap) =
+  let (ex::[((Int,Int),Field)]) = Prelude.filter
+                                    (\(l,a) -> directions dirs (l, a)) $ execStateT (movable ((mp ! i)^. sqPiece)) (i, field)
+                                    in map reverseField $ map (^. _2) ex
+
+-- TODO: 持ち駒を打つ mplus
 move :: Move -> Field -> [Field]
 move (Move pie dirs) field =
-  let pies = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
+  let (pies::[(Int,Int)]) = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
   let (ex::[((Int,Int),Field)]) = concatMap
                                   (\k -> Prelude.filter
-                                    (\(l,a) -> directions dirs (l, a)) $ execStateT (movable pie) (k, field)) pies in
-
-  map reverseField $ case ex of
-    [] -> []
-    xs -> List.nub $ map (^. _2) xs
+                                    (\(l,a) -> directions dirs (l, a)) $ execStateT (movable pie) (k, field)) pies
+                                    in map reverseField $ map (^. _2) ex
 
 direction :: Direction -> ((Int, Int), Field) -> Bool
 direction (IsPromotion is_prom) (l, a) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField)))
