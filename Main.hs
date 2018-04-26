@@ -174,19 +174,29 @@ sleepParser id_either = Parsec.try $ do
 
 shogiParser :: (MonadIO m) => ParsecT String u m String
 shogiParser = do
-  mv <- Shogi.moveParser
-  str <- lift $ liftIO $ withFile "shogi.txt" ReadWriteMode $ \shogi_file -> do
-    (oldField :: [Shogi.Field]) <- (do
-      field <- hGetLine shogi_file
-      if field == ""
-        then throwIO $ userError "Null!"
-        else case reads field of
-                [] -> throwIO $ userError "No parse!"
-                (x:xs) -> return $ fst x
-      ) `catch` (\(e::Control.Exception.SomeException) -> return [Shogi.initialField])
-    let newField = concatMap (Shogi.move mv) oldField
-    hPutStr shogi_file $ show newField
-    return $ concat $ map ((++"\n").Shogi.showField) newField
+  _ <- string "shogi" <|> string "将棋"
+  skipMany space
+
+  str <- (do
+    mv <- Shogi.moveParser
+    str <- lift $ liftIO $ withFile "shogi.txt" ReadWriteMode $ \shogi_file -> do
+      (oldField :: [Shogi.Field]) <- (do
+        field <- hGetLine shogi_file
+        if field == ""
+          then throwIO $ userError "Null!"
+          else case reads field of
+                  [] -> error "parse error."
+                  (x:xs) -> return $ fst x
+        ) `catch` (\(e::Control.Exception.SomeException) -> return [Shogi.initialField])
+      let newField = concatMap (Shogi.move mv) oldField
+      hPutStr shogi_file $ show newField
+      return $ concat $ map ((++"\n").Shogi.showField) newField
+    return str
+    ) <|> (do
+      _ <- string "init"
+      lift $ liftIO $ Prelude.writeFile  "shogi.txt" $ show [Shogi.initialField]
+      return $ Shogi.showField Shogi.initialField
+      )
   return str
 
 lsParser ::  (Monad m) => ParsecT String u m String

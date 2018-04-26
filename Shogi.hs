@@ -329,8 +329,6 @@ pieceParser = do
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = Parsec.try $ do
-  _ <- string "shogi" <|> string "将棋"
-  skipMany space
   n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
