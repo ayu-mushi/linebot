@@ -1,7 +1,9 @@
 {-# LANGUAGE TemplateHaskell, MonadComprehensions, DeriveFunctor, TypeSynonymInstances, FlexibleInstances #-}
-{-# LANGUAGE ScopedTypeVariables#-}
+{-# LANGUAGE ScopedTypeVariables, BangPatterns#-}
 module Shogi where
 
+import Control.Monad.Trans(liftIO, lift, MonadIO)
+import Control.Exception (try, IOException, SomeException, throwIO, catch)
 import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, insert, lookup, null, empty, filter, filterWithKey, delete, keys, (!))
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Functor(($>), (<$))
@@ -11,6 +13,7 @@ import Control.Monad.State (get, put, StateT(..), State, runStateT, evalStateT, 
 import qualified Data.List as List(delete, nub)
 import Data.Monoid((<>))
 import Text.Parsec as Parsec
+import System.IO.Strict as Strict(readFile)
 
 data Piece' a =
   King
@@ -405,16 +408,47 @@ dirParser :: (Monad m) => ParsecT String u m Direction
 dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ string "上") <|> (DirRight <$ string "右") <|> (DirLeft <$ string "左") <|> (IsPromotion Shogi.Unpromoted <$ (string "不成")) <|> (IsPromotion Shogi.Promoted <$ (char '成')) <|> (DirectUp <$ (char '直'))
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
-moveParser = Parsec.try $ do
-  f <- (Shogi.fifiPSymmetry <$ char '△') <|> (id <$ return "")
+moveParser = do
+  maySym <- (Shogi.fifiPSymmetry <$ char '△') <|> (id <$ return "")
   n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
   dirs <- many dirParser
-  return $ Shogi.Move piece $ (ToDir $ f (n,m)):dirs
+  return $ Shogi.Move piece $ (ToDir $ maySym (n,m)):dirs
 
 -- 成るのと成らないのを非決定的に行う→DONE
 -- 王手判定
 -- TODO: 持ち駒を打つ
 -- △で反転
 -- 銀成と成銀の区別ある? →DONE
+--
+shogiParser :: (MonadIO m) => ParsecT String u m String
+shogiParser = Parsec.try $ do
+  _ <- string "shogi" <|> string "将棋"
+  skipMany space
+
+  str <- (do
+    mayReverse <- (Shogi.reverseField <$ string "▲") <|> (id <$ return "")
+    mv <- Shogi.moveParser
+    !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
+    let old_field = read old_field_str :: [Shogi.Field]
+    let newField = List.nub $ concatMap (Shogi.move mv) old_field
+
+    lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
+    return $ concat $ map ((++"\n").Shogi.showField) $ map mayReverse $ newField
+    ) <|> (do
+      _ <- string "init"
+      lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show [Shogi.initialField]
+      return $ Shogi.showField Shogi.initialField
+      ) <|> (do
+      _ <- string "display"
+      skipMany space
+      !(old_field::[Shogi.Field]) <-  (do
+        _ <- string "reverse"
+        fmap (map Shogi.reverseField) $ fmap read $ lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])) <|> (fmap read $ lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField]))
+
+      return $ concatMap ((++"\n").Shogi.showField) $ (old_field :: [Shogi.Field])
+      )
+  return str
+
+

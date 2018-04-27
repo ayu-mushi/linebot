@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase, DoAndIfThenElse, BangPatterns#-}
+{-# LANGUAGE OverloadedStrings,ScopedTypeVariables, LambdaCase, DoAndIfThenElse#-}
 
 import Web.Scotty as Scotty
 import Data.Maybe (fromMaybe)
@@ -35,7 +35,7 @@ import Data.List(nub)
 import Post as Post
 import Get as Get
 import Text.Parsec as Parsec
-import qualified Shogi as Shogi
+import qualified Shogi as Shogi  (shogiParser)
 
 main :: IO ()
 main = do
@@ -60,7 +60,7 @@ main = do
         Left (e::IOException) -> html "File not found."
     get "/shogi/:move" $ do
       mv <- param "move"
-      Right parsed <- runParserT shogiParser "" "" $ "shogi " <> mv
+      Right parsed <- runParserT Shogi.shogiParser "" "" $ "shogi " <> mv
       text $ Text.pack $ {-Shogi.shogiTest -}parsed
     post "/callback" $ do
       channelAccessToken <- lift accessToken
@@ -135,7 +135,7 @@ mainParser id_either = do
        Left (a::IOException) -> return ()
        Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> shogiParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> Shogi.shogiParser
   return str
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
@@ -174,35 +174,6 @@ sleepParser id_either = Parsec.try $ do
 -- 機能候補: 名前からメッセージを送る機能
 
 
-
-shogiParser :: (MonadIO m) => ParsecT String u m String
-shogiParser = do
-  _ <- string "shogi" <|> string "将棋"
-  skipMany space
-
-  str <- (do
-    mayReverse <- (Shogi.reverseField <$ string "▲") <|> (id <$ return "")
-    mv <- Shogi.moveParser
-    !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
-    let old_field = read old_field_str :: [Shogi.Field]
-    let newField = nub $ concatMap (Shogi.move mv) old_field
-
-    lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
-    return $ concat $ map ((++"\n").Shogi.showField) $ map mayReverse $ newField
-    ) <|> (do
-      _ <- string "init"
-      lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show [Shogi.initialField]
-      return $ Shogi.showField Shogi.initialField
-      ) <|> (do
-      _ <- string "display"
-      skipMany space
-      !(old_field::[Shogi.Field]) <-  (do
-        _ <- string "reverse"
-        fmap (map Shogi.reverseField) $ fmap read $ lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])) <|> (fmap read $ lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField]))
-
-      return $ concatMap ((++"\n").Shogi.showField) $ (old_field :: [Shogi.Field])
-      )
-  return str
 
 lsParser ::  (Monad m) => ParsecT String u m String
 lsParser = Parsec.try $ do
