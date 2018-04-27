@@ -297,8 +297,8 @@ helpParser = Parsec.try $ do
   \ \n「help」: このヘルプを表示する。\
   \ \n「([0-9]+)秒後」:  数字の部分を自然数として解釈し、その秒数待った後で通知します。ex. '@10秒後'\
   \ \n「sleep [0-9]+」:  数字の部分を自然数として解釈し、その秒数(デフォルト: 10)の間死にます。ex. '@sleep 10'\
-  \ \n(オウム)|(parrot)|鏡|(mirror)|(エコー)|(echo): オウム返しします。ex. '@parrot AAA'\
-  \ \n(shogi)|(将棋) init: 将棋を最初からします。ex. '@shogi init'\
-  \ \n(shogi)|(将棋) display: 将棋の現状態を表示します。オプション: reverseをつけると反転して表示します。ex. '@shogi display reverse'\
-  \ \n(shogi)|(将棋) [1-9][一-九][歩銀王..]: 駒を動かします。ex. '@shogi 58金右'\
+  \ \n「(オウム)|(parrot)|鏡|(mirror)|(エコー)|(echo)」: オウム返しします。ex. '@parrot AAA'\
+  \ \n「(shogi)|(将棋) init」: 将棋を最初からします。ex. '@shogi init'\
+  \ \n「(shogi)|(将棋) display」: 将棋の現状態を表示します。オプション: reverseをつけると反転して表示します。ex. '@shogi display reverse'\
+  \ \n「(shogi)|(将棋) [1-9][一-九][歩銀王..]」: 駒を動かします。ex. '@shogi 58金右'\
   \"

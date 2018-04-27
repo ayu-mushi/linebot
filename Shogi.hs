@@ -308,7 +308,7 @@ promotion = (Promoted <$)
 moveFrom :: (Int, Int) -> [Direction] -> Field -> [Field]
 moveFrom i@(ix, iy) dirs field@(Field mp cap) =
   let (ex::[((Int,Int),Field)]) = Prelude.filter
-                                    (\(l,a) -> directions i (l, a) dirs) $ execStateT (movable ((mp ! i)^. sqPiece)) (i, field)
+                                    (\(l,a) -> directions ((mp ! i)^. sqPiece) i (l, a) dirs) $ execStateT (movable ((mp ! i)^. sqPiece)) (i, field)
                                     in map reverseField $ map (^. _2) ex
 
 -- TODO: 持ち駒を打つ mplus
@@ -317,21 +317,21 @@ move (Move pie dirs) field =
   let (pies::[(Int,Int)]) = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
   let (ex::[((Int,Int),Field)]) = concatMap
                                   (\k -> Prelude.filter
-                                    (\(l,a) -> directions k (l, a) dirs) $ execStateT (movable pie) (k, field)) pies
+                                    (\(l,a) -> directions pie k (l, a) dirs) $ execStateT (movable pie) (k, field)) pies
                                     in map reverseField $ map (^. _2) ex
 
-direction :: (Int, Int) -> ((Int, Int), Field) -> Direction -> Bool
-direction original_xy (l, a) (IsPromotion is_prom) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField)))
-direction original_xy (l, a) (ToDir loc) = loc == l
-direction original_xy@(ox,oy) (l@(newx,newy), a) Subtraction = newy > oy
-direction original_xy@(ox,oy) (l@(newx,newy), a) Par = newy == oy && abs (newx - ox) == 1
-direction original_xy@(ox,oy) (l@(newx,newy), a) Top = newy < oy
-direction original_xy@(ox,oy) (l@(newx,newy), a) DirRight = newx > ox
-direction original_xy@(ox,oy) (l@(newx,newy), a) DirLeft = ox > newx
-direction original_xy@(ox,oy) (l@(newx,newy), a) DirectUp = ox == newx && newy < oy
+direction :: Piece -> (Int, Int) -> ((Int, Int), Field) -> Direction -> Bool
+direction o_pie original_xy (l, a) (IsPromotion is_prom) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField))) && (Unpromoted == isPromoted o_pie)
+direction o_pie original_xy (l, a) (ToDir loc) = loc == l
+direction o_pie original_xy@(ox,oy) (l@(newx,newy), a) Subtraction = newy > oy
+direction o_pie original_xy@(ox,oy) (l@(newx,newy), a) Par = newy == oy && abs (newx - ox) == 1
+direction o_pie original_xy@(ox,oy) (l@(newx,newy), a) Top = newy < oy
+direction o_pie original_xy@(ox,oy) (l@(newx,newy), a) DirRight = newx > ox
+direction o_pie original_xy@(ox,oy) (l@(newx,newy), a) DirLeft = ox > newx
+direction o_pie original_xy@(ox,oy) (l@(newx,newy), a) DirectUp = ox == newx && newy < oy
 
-directions :: (Int, Int) -> ((Int, Int), Field) -> [Direction] -> Bool
-directions original_xy fields dirs = foldl (&&) True $ map (direction original_xy fields) dirs
+directions :: Piece -> (Int, Int) -> ((Int, Int), Field) -> [Direction] -> Bool
+directions o_pie original_xy fields dirs = foldl (&&) True $ map (direction o_pie original_xy fields) dirs
 
 isPromoted :: Piece -> Promotion
 isPromoted King = Unpromoted
@@ -417,3 +417,4 @@ moveParser = Parsec.try $ do
 -- 王手判定
 -- TODO: 持ち駒を打つ
 -- △で反転
+-- 銀成と成銀の区別ある? →DONE
