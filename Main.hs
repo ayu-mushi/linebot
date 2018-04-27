@@ -181,13 +181,14 @@ shogiParser = do
   skipMany space
 
   str <- (do
+    mayReverse <- (Shogi.reverseField <$ string "▲") <|> (id <$ return "")
     mv <- Shogi.moveParser
     !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
     let old_field = read old_field_str :: [Shogi.Field]
     let newField = nub $ concatMap (Shogi.move mv) old_field
 
     lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
-    return $ concat $ map ((++"\n").Shogi.showField) newField
+    return $ concat $ map ((++"\n").Shogi.showField) $ map mayReverse $ newField
     ) <|> (do
       _ <- string "init"
       lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show [Shogi.initialField]

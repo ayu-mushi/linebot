@@ -406,7 +406,7 @@ dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ 
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = Parsec.try $ do
-  f <- (Shogi.fifiPSymmetry <$ char '△') <|> (id <$ char '▲') <|> (id <$ return "")
+  f <- (Shogi.fifiPSymmetry <$ char '△') <|> (id <$ return "")
   n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
