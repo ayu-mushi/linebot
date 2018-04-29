@@ -91,8 +91,6 @@ main = do
         return ()
       else return ()
 
-      return ()
-
 mapParseError :: (String -> String) -> Parsec.Message -> Parsec.Message
 mapParseError f err =
   case err of
@@ -172,8 +170,6 @@ sleepParser id_either = Parsec.try $ do
 
 -- LINE Script
 -- 機能候補: 名前からメッセージを送る機能
-
-
 
 lsParser ::  (Monad m) => ParsecT String u m String
 lsParser = Parsec.try $ do

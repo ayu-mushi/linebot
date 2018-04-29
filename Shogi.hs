@@ -5,12 +5,12 @@ module Shogi where
 import Control.Monad.Trans(liftIO, lift, MonadIO)
 import Control.Exception (try, IOException, SomeException, throwIO, catch)
 import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, insert, lookup, null, empty, filter, filterWithKey, delete, keys, (!))
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe, catMaybes)
 import Data.Functor(($>), (<$))
 import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&), both, (^.), use, (.=), (%=), at)
 import Control.Monad (mplus, guard, forM_, MonadPlus, mzero, msum)
 import Control.Monad.State (get, put, StateT(..), State, runStateT, evalStateT, execStateT)
-import qualified Data.List as List(delete, nub)
+import qualified Data.List as List(delete, nub, elem)
 import Data.Monoid((<>))
 import Text.Parsec as Parsec
 import System.IO.Strict as Strict(readFile)
@@ -45,7 +45,7 @@ showPiece (Bishop Unpromoted) = "角"
 showPiece (Bishop Promoted) = "馬"
 
 data Promotion = Promoted | Unpromoted deriving (Eq,Show,Read)
-data Direction = ToDir (Int,Int) | IsPromotion Promotion | Top | DirectUp | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show,Read)
+data Direction = DirMove | DirSet | ToDir (Int,Int) | IsPromotion Promotion | Top | DirectUp | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show,Read)
 data Move = Move { _movPiece :: Piece
                   ,_movDirs :: [Direction]
                   } deriving (Eq,Show,Read) -- 指し手
@@ -145,7 +145,7 @@ initialField = let later_field = pawnList `Map.union` symmetric_part `Map.union`
      ]
 
 moveMap :: Ord i => i -> i -> Map.Map i a -> Map.Map i a
-moveMap i j mp = let a = mp ! i in insert j a (Map.delete i mp)
+moveMap i j mp = let a = mp ! i in insert j a $ Map.delete i mp
 
 moveMapZero :: (Ord i, MonadPlus m) => i -> i -> Map.Map i a -> m (Map.Map i a)
 moveMapZero i j mp = let x = Map.lookup i mp in
@@ -160,6 +160,12 @@ moveMapZeroProm i@(ix,iy) j@(jx,jy) mp = let x = Map.lookup i mp in
       guard $ iy <= 3 || jy <= 3
       return $ insert j (a & sqPiece %~ promotion) (Map.delete i mp)
     Nothing -> mzero
+
+
+unmovableZero :: MonadPlus m => Piece -> (Int, Int) -> m ()
+unmovableZero pie xy = do
+  guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
+  guard (2 < xy^._2 || (pie /= Knight Unpromoted))
 
 applyPiece :: PieceM (Int, Int) -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
 applyPiece f = do -- 成りを追加
@@ -308,6 +314,46 @@ promotion = (Promoted <$)
 
 -- moveFrom
 
+setMapZero :: MonadPlus m => (Int, Int) -> Piece -> Map.Map (Int, Int) Square -> m (Map.Map (Int, Int) Square)
+setMapZero i@(ix, iy) pie mp = do
+  let x = Map.lookup i mp
+  case x of
+       Just _ -> mzero
+       Nothing -> do
+         unmovableZero pie i
+         return $ insert i (Square pie First) mp
+
+ruleOfTwoPone :: MonadPlus m => Piece -> (Int, Int) -> Map.Map (Int, Int) Square -> m ()
+ruleOfTwoPone pie i@(ix,iy) mp =
+  guard $ (||) (pie /= Pawn Unpromoted) $ foldl (&&) True $ [(Map.lookup (ix, y) mp) /= Just (Square (Pawn Unpromoted) First) | y <- [1..9]]
+
+setCaptured :: MonadPlus m => Piece -> (Int, Int) -> Field -> m Field
+setCaptured pie i@(ix, iy) (Field fie cap) = do
+  let my_cap = cap ! First
+  guard $ pie `List.elem` my_cap
+  fie2 <- setMapZero i pie fie
+  return $ Field fie2 $ insert First (List.delete pie $ my_cap) $ cap
+
+settableZone :: Piece -> Field -> [(Int, Int)]
+settableZone pie fie@(Field fi cap) = do
+  k <- [(x, y)|x<- [1..9], y<-[1..9]]
+  unmovableZero pie k
+  case k `Map.lookup` fi of
+       Just a -> mzero
+       Nothing -> return k
+
+moveOrSet :: Move -> Field -> [Field]
+moveOrSet mv@(Move pie dirs) field = move mv field `mplus` set mv field where
+  set mv@(Move pie dirs) field = do
+    guard $ not $ DirMove `List.elem` dirs
+    settable <- settableZone pie field
+    ruleOfTwoPone pie settable $ field ^. fromField
+    forM_ dirs $ \d -> case d of
+                            ToDir xy -> guard $ xy == settable
+                            _ -> return ()
+    map reverseField $ setCaptured pie settable field
+
+
 moveFrom :: (Int, Int) -> [Direction] -> Field -> [Field]
 moveFrom i@(ix, iy) dirs field@(Field mp cap) =
   let (ex::[((Int,Int),Field)]) = Prelude.filter
@@ -321,7 +367,9 @@ move (Move pie dirs) field =
   let (ex::[((Int,Int),Field)]) = concatMap
                                   (\k -> Prelude.filter
                                     (\(l,a) -> directions pie k (l, a) dirs) $ execStateT (movable pie) (k, field)) pies
-                                    in map reverseField $ map (^. _2) ex
+                                    in do
+                                     guard $ not $ DirSet `List.elem` dirs
+                                     map reverseField $ map (^. _2) ex
 
 direction :: Piece -> (Int, Int) -> ((Int, Int), Field) -> Direction -> Bool
 direction o_pie original_xy (l, a) (IsPromotion is_prom) = (Just is_prom == (fmap (\x -> isPromoted (x^.sqPiece)) $ Map.lookup l $ (a^. fromField))) && (Unpromoted == isPromoted o_pie)
@@ -381,7 +429,7 @@ chineseNumParser = do
 pieceParser :: (Monad m) => ParsecT String u m Shogi.Piece
 pieceParser = do
   nari <- Shogi.Promoted <$ (char '成') <|> return Shogi.Unpromoted
-  str <- msum $ map string ["歩", "香", "香車", "桂", "桂馬", "銀", "金", "玉","王", "飛", "飛車", "角", "竜", "馬", "と金", "と"]
+  str <- msum $ map (Parsec.try . string) ["歩", "香", "香車", "桂", "桂馬", "銀", "金", "玉", "王", "飛", "飛車", "角", "竜", "馬", "と金", "と"]
 
   let unpromoteds = case str of "歩" -> Shogi.Pawn Shogi.Unpromoted
                                 "香" -> Shogi.Lance  Shogi.Unpromoted
@@ -401,11 +449,11 @@ pieceParser = do
                                 "と" -> Shogi.Pawn Shogi.Promoted
 
   return $ case nari of
-    Shogi.Promoted -> Shogi.promotion unpromoteds
-    Shogi.Unpromoted -> unpromoteds
+    Promoted -> Promoted <$ unpromoteds
+    Unpromoted -> unpromoteds
 
 dirParser :: (Monad m) => ParsecT String u m Direction
-dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ string "上") <|> (DirRight <$ string "右") <|> (DirLeft <$ string "左") <|> (IsPromotion Shogi.Unpromoted <$ (string "不成")) <|> (IsPromotion Shogi.Promoted <$ (char '成')) <|> (DirectUp <$ (char '直'))
+dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ string "上") <|> (DirRight <$ string "右") <|> (DirLeft <$ string "左") <|> (IsPromotion Shogi.Unpromoted <$ (string "不成")) <|> (IsPromotion Shogi.Promoted <$ (char '成')) <|> (DirectUp <$ (char '直')) <|> (DirSet <$ (char '打')) <|> (DirMove <$ (char '動'))
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = do
@@ -417,11 +465,12 @@ moveParser = do
   return $ Shogi.Move piece $ (ToDir $ maySym (n,m)):dirs
 
 -- 成るのと成らないのを非決定的に行う→DONE
--- 王手判定
+-- TODO: 王手判定
 -- TODO: 持ち駒を打つ
--- △で反転
+-- △で反転→DONE
 -- 銀成と成銀の区別ある? →DONE
---
+-- 成駒の動きがおかしい
+
 shogiParser :: (MonadIO m) => ParsecT String u m String
 shogiParser = Parsec.try $ do
   _ <- string "shogi" <|> string "将棋"
@@ -432,7 +481,7 @@ shogiParser = Parsec.try $ do
     mv <- Shogi.moveParser
     !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
     let old_field = read old_field_str :: [Shogi.Field]
-    let newField = List.nub $ concatMap (Shogi.move mv) old_field
+    let newField = List.nub $ concatMap (Shogi.moveOrSet mv) old_field
 
     lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
     return $ concat $ map ((++"\n").Shogi.showField) $ map mayReverse $ newField
@@ -451,4 +500,4 @@ shogiParser = Parsec.try $ do
       )
   return str
 
-
+-- \f -> foldl (&&) True . map f
