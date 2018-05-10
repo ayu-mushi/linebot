@@ -232,9 +232,9 @@ linePush channelAccessToken uid message = do
     "type": "text",
     "text": "Hello, world!"
   }
-}-}
+}
 
-{-{"events":
+{"events":
   [{"type":"message",
   "replyToken":"fb5ff2b6d4764384be43105de58b6e4a",
   "source":{"userId":"Ub0292059288c2655f61486607cf0c7b9","type":"user"},
@@ -250,7 +250,7 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
 
 appName :: String
-appName = "人工無脳(仮) ver 0.1."
+appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
 
 -- なつくようにする
 
