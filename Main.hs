@@ -268,5 +268,5 @@ helpParser = Parsec.try $ do
   \ \n「(オウム)|(parrot)|鏡|(mirror)|(エコー)|(echo)」: オウム返しします。ex. '@parrot AAA'\
   \ \n「(shogi)|(将棋) init」: 将棋を最初からします。ex. '@shogi init'\
   \ \n「(shogi)|(将棋) display」: 将棋の現状態を表示します。オプション: reverseをつけると反転して表示します。ex. '@shogi display reverse'\
-  \ \n「(shogi)|(将棋) [1-9][一-九][歩銀王..]」: 駒を動かします。ex. '@shogi 58金右'\
+  \ \n「(shogi)|(将棋) [1-9][一-九][歩銀王..][右引寄打..]?」: 駒を動かします。ex. '@shogi 58金右'\
   \"

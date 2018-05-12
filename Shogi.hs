@@ -336,7 +336,7 @@ setCaptured pie i@(ix, iy) (Field fie cap) = do
 
 settableZone :: Piece -> Field -> [(Int, Int)]
 settableZone pie fie@(Field fi cap) = do
-  k <- [(x, y)|x<- [1..9], y<-[1..9]]
+  k <- [ (x, y) | x <- [1..9], y <-[1..9] ]
   unmovableZero pie k
   case k `Map.lookup` fi of
        Just a -> mzero
@@ -414,17 +414,19 @@ shogiTest = (concat $ map showField $ Shogi.move (Shogi.Move (Shogi.King) (4, 8)
 
 chineseNumParser :: (Monad m) => ParsecT String u m Int
 chineseNumParser = do
-  c <- msum $ map char "一二三四五六七八九"
-  return $ case c of
-    '一' -> 1
-    'ニ' -> 2
-    '三' -> 3
-    '四' -> 4
-    '五' -> 5
-    '六' -> 6
-    '七' -> 7
-    '八' -> 8
-    '九' -> 9
+  c <- msum $ map char "一ニ二三四五六七八九"
+  case c of
+    '一' -> return $ 1
+    'ニ' -> return $ 2
+    '二' -> return $ 2
+    '三' -> return $ 3
+    '四' -> return $ 4
+    '五' -> return $ 5
+    '六' -> return $ 6
+    '七' -> return $ 7
+    '八' -> return $ 8
+    '九' -> return $ 9
+    c -> fail $ c:" is not chineseNum(漢数字.)"
 
 pieceParser :: (Monad m) => ParsecT String u m Shogi.Piece
 pieceParser = do
@@ -453,7 +455,16 @@ pieceParser = do
     Unpromoted -> unpromoteds
 
 dirParser :: (Monad m) => ParsecT String u m Direction
-dirParser = (Subtraction <$ string "引") <|> (Par <$ string "寄") <|> (Top <$ string "上") <|> (DirRight <$ string "右") <|> (DirLeft <$ string "左") <|> (IsPromotion Shogi.Unpromoted <$ (string "不成")) <|> (IsPromotion Shogi.Promoted <$ (char '成')) <|> (DirectUp <$ (char '直')) <|> (DirSet <$ (char '打')) <|> (DirMove <$ (char '動'))
+dirParser = (Subtraction <$ string "引")
+  <|> (Par <$ string "寄")
+  <|> (Top <$ string "上")
+  <|> (DirRight <$ string "右")
+  <|> (DirLeft <$ string "左")
+  <|> (IsPromotion Shogi.Unpromoted <$ (string "不成"))
+  <|> (IsPromotion Shogi.Promoted <$ (char '成'))
+  <|> (DirectUp <$ (char '直'))
+  <|> (DirSet <$ (char '打'))
+  <|> (DirMove <$ (char '動'))
 
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = do
@@ -501,3 +512,5 @@ shogiParser = Parsec.try $ do
   return str
 
 -- \f -> foldl (&&) True . map f
+
+-- data UndoTree a  zipper
