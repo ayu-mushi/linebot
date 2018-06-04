@@ -143,10 +143,10 @@ memoParser = Parsec.try $ do
   text <- many anyToken
   isthereMemo <- lift $ liftIO $ doesFileExist "memo.txt"
   oldText <- if isthereMemo
-                then lift $ liftIO $ Prelude.readFile "memo.txt"
+                then lift $ liftIO $ Strict.readFile "memo.txt"
                 else return ""
   lift $ liftIO $ Prelude.writeFile "memo.txt" $ text <> "\n ----- \n" <> oldText
-  lift $ liftIO $ Prelude.readFile "memo.txt"
+  lift $ liftIO $ Strict.readFile "memo.txt"
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
