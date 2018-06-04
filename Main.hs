@@ -141,7 +141,8 @@ memoParser = Parsec.try $ do
   _ <- msum $ map string ["memo", "メモ"]
   skipMany space
   text <- many anyToken
-  lift $ liftIO $ Prelude.writeFile "memo.txt" text
+  oldText <- lift $ liftIO $ Prelude.readFile "memo.txt"
+  lift $ liftIO $ Prelude.writeFile "memo.txt" $ text <> "\n ----- \n" <> oldText
   lift $ liftIO $ Prelude.readFile "memo.txt"
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
@@ -181,7 +182,7 @@ sleepParser id_either = Parsec.try $ do
 
 lsParser ::  (Monad m) => ParsecT String u m String
 lsParser = Parsec.try $ do
-  _ <- string "ls"
+  _ <- msum $ map string ["ls", "linescript"]
   return ""
 
 data LSSentense a = DefVar a (LSSentense a) | InitVar a (LSFormula a) (LSSentense a) | Seq (LSSentense a) (LSSentense a) | Substitution a (LSFormula a)
@@ -261,6 +262,7 @@ appName :: String
 appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
 
 -- なつくようにする
+-- 時計
 
 helpParser :: Monad m => ParsecT String u m String
 helpParser = Parsec.try $ do
