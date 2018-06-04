@@ -161,7 +161,7 @@ secondParser = Parsec.try $ do
 -- try の位置を変える
 
 parrotParser ::  (Monad m) => ParsecT String u m String
-parrotParser = do
+parrotParser = Parsec.try $ do
   _ <- msum $ map string ["オウム", "parrot", "鏡", "mirror", "エコー", "echo"]
   many anyToken
 
