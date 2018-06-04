@@ -143,7 +143,7 @@ mainParser id_either = do
 
 memoParser :: (MonadIO m) => ParsecT String u m String
 memoParser = Parsec.try $ do
-  _ <- msum $ map string ["memo", "メモ"]
+  _ <- msum $ map string ["m", "memo", "メモ"]
   skipMany space
   text <- many anyToken
   isthereMemo <- lift $ liftIO $ doesFileExist "memo.txt"
@@ -171,13 +171,13 @@ secondParser = Parsec.try $ do
 
 parrotParser ::  (Monad m) => ParsecT String u m String
 parrotParser = Parsec.try $ do
-  _ <- msum $ map string ["オウム", "parrot", "鏡", "mirror", "エコー", "echo"]
+  _ <- msum $ map string ["p", "オウム", "parrot", "鏡", "mirror", "エコー", "echo"]
   many anyToken
 
 
 sleepParser ::  (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
 sleepParser id_either = Parsec.try $ do
-  _ <- msum $ map string ["sleep", "眠れ", "眠る"]
+  _ <- msum $ map string ["sl", "sleep", "眠れ", "眠る"]
   skipMany space
   numeric <- many1 digit <|> return "10"
   lift $ liftIO $ Prelude.writeFile "is_sleep.txt" $ show id_either
@@ -190,7 +190,7 @@ sleepParser id_either = Parsec.try $ do
 
 lsParser ::  (Monad m) => ParsecT String u m String
 lsParser = Parsec.try $ do
-  _ <- msum $ map string ["ls", "linescript"]
+  _ <- msum $ map string ["l", "ls", "linescript"]
   return ""
 
 data LSSentense a = DefVar a (LSSentense a) | InitVar a (LSFormula a) (LSSentense a) | Seq (LSSentense a) (LSSentense a) | Substitution a (LSFormula a)
@@ -274,7 +274,7 @@ appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
 
 helpParser :: Monad m => ParsecT String u m String
 helpParser = Parsec.try $ do
-  _ <- string "help"
+  _ <- msum $ map string [ "h", "help"]
   Parsec.eof
 
   return $ appName <> "\
