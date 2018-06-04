@@ -142,7 +142,7 @@ memoParser = Parsec.try $ do
   skipMany space
   text <- many anyToken
   lift $ liftIO $ Prelude.writeFile "memo.txt" text
-  Prelude.readFile "memo.txt"
+  lift $ liftIO $ Prelude.readFile "memo.txt"
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
