@@ -141,7 +141,10 @@ memoParser = Parsec.try $ do
   _ <- msum $ map string ["memo", "メモ"]
   skipMany space
   text <- many anyToken
-  oldText <- lift $ liftIO $ Prelude.readFile "memo.txt"
+  isthereMemo <- lift $ liftIO $ doesFileExist "memo.txt"
+  oldText <- if isthereMemo
+                then lift $ liftIO $ Prelude.readFile "memo.txt"
+                else return ""
   lift $ liftIO $ Prelude.writeFile "memo.txt" $ text <> "\n ----- \n" <> oldText
   lift $ liftIO $ Prelude.readFile "memo.txt"
 
