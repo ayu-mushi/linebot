@@ -477,10 +477,11 @@ moveParser = do
 
 -- 成るのと成らないのを非決定的に行う→DONE
 -- TODO: 王手判定
--- TODO: 持ち駒を打つ
+-- TODO: 持ち駒を打つ DONE
 -- △で反転→DONE
 -- 銀成と成銀の区別ある? →DONE
 -- 成駒の動きがおかしい
+-- html/cssで非決定盤面を表現
 
 shogiParser :: (MonadIO m) => ParsecT String u m String
 shogiParser = Parsec.try $ do

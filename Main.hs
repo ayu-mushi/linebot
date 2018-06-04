@@ -133,8 +133,16 @@ mainParser id_either = do
        Left (a::IOException) -> return ()
        Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> Shogi.shogiParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser <|> Shogi.shogiParser
   return str
+
+memoParser :: (MonadIO m) => ParsecT String u m String
+memoParser = Parsec.try $ do
+  _ <- msum $ map string ["memo", "メモ"]
+  skipMany space
+  text <- many anyToken
+  lift $ liftIO $ Prelude.writeFile "memo.txt" text
+  Prelude.readFile "memo.txt"
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
