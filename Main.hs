@@ -31,6 +31,7 @@ import Control.Concurrent (threadDelay)
 import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message), errorMessages)
 import Control.Monad.State(execStateT, runStateT, evalStateT)
 import Data.List(nub)
+import Control.DeepSeq(deepseq)
 
 import Post as Post
 import Get as Get
@@ -62,6 +63,10 @@ main = do
       mv <- param "move"
       Right parsed <- runParserT Shogi.shogiParser "" "" $ "shogi " <> mv
       text $ Text.pack $ {-Shogi.shogiTest -}parsed
+    get "/command/:options" $ do
+      opt <- param "options"
+      Right str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser <|> Shogi.shogiParser) "" "" opt
+      text $ Text.pack str
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body
@@ -145,7 +150,7 @@ memoParser = Parsec.try $ do
   oldText <- if isthereMemo
                 then lift $ liftIO $ Strict.readFile "memo.txt"
                 else return ""
-  lift $ liftIO $ Prelude.writeFile "memo.txt" $ text <> "\n ----- \n" <> oldText
+  lift $ liftIO $ oldText `deepseq` Prelude.writeFile "memo.txt" (text <> "\n ----- \n" <> oldText)
   lift $ liftIO $ Strict.readFile "memo.txt"
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b

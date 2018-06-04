@@ -14,6 +14,7 @@ import qualified Data.List as List(delete, nub, elem)
 import Data.Monoid((<>))
 import Text.Parsec as Parsec
 import System.IO.Strict as Strict(readFile)
+import Control.DeepSeq (deepseq)
 
 data Piece' a =
   King
@@ -491,11 +492,11 @@ shogiParser = Parsec.try $ do
   str <- (do
     mayReverse <- (Shogi.reverseField <$ string "▲") <|> (id <$ return "")
     mv <- Shogi.moveParser
-    !old_field_str <- lift $ liftIO $ Strict.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
+    !old_field_str <- lift $ liftIO $ Prelude.readFile "shogi.txt" `catch` (\(e::IOException) -> return $ show [Shogi.initialField])
     let old_field = read old_field_str :: [Shogi.Field]
     let newField = List.nub $ concatMap (Shogi.moveOrSet mv) old_field
 
-    lift $ liftIO $ Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
+    lift $ liftIO $ old_field_str `deepseq` Prelude.writeFile "shogi.txt" $ show (newField :: [Shogi.Field])
     return $ concat $ map ((++"\n").Shogi.showField) $ map mayReverse $ newField
     ) <|> (do
       _ <- string "init"

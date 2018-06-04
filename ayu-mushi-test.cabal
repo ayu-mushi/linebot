@@ -27,3 +27,4 @@ executable          ayu-mushi-test
                   , aeson
                   , parsec
                   , strict
+                  , deepseq
