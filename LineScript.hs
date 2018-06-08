@@ -27,12 +27,14 @@ sentenceParser ::  (Monad m) => ParsecT String u m (LSSentence String)
 sentenceParser = initVarParser <|> defVarParser <|> substParser <|> seqSentParser
 
 seqParser ::  (Monad m) => ParsecT String u m [LSSentence String]
-seqParser = (<|>) ([] <$ eof) $ Parsec.try $ do
+seqParser = Parsec.try $ do
   s <- sentenceParser
   skipMany space
-  string ";"
-  skipMany space
-  t <- seqParser
+  t <- (<|>) ([] <$ eof) $ do
+    string ";"
+    skipMany space
+    t <- seqParser
+    return t
   return $ s:t
 
 substParser :: (Monad m) => ParsecT String u m (LSSentence String)
@@ -68,7 +70,7 @@ literalParser = Parsec.try $ do
 
 lsParser ::  (Monad m) => ParsecT String u m String
 lsParser = Parsec.try $ do
-  _ <- msum $ map string ["ls", "linescript", "l"]
+  msum $ map (Parsec.try . string) ["ls", "linescript", "l"]
   skipMany space
   sent <- seqParser
   return $ show sent
@@ -88,8 +90,12 @@ seqSentParser = do
     t <- seqParser
     return $ s:t
 
+breakParser :: (Monad m) => ParsecT String u m (LSSentence String)
+breakParser = do
+  string "break"
+  return Break
 
-data LSSentence a = If (LSFormula a) (LSSentence a) | DefVar a | InitVar a (LSFormula a) | Substitution a (LSFormula a) | Seq [LSSentence a] deriving (Show)
+data LSSentence a = If (LSFormula a) (LSSentence a) | Break | DefVar a | InitVar a (LSFormula a) | Substitution a (LSFormula a) | Seq [LSSentence a] deriving (Show)
 data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float deriving(Show)
 data LSType = LSBool | LSString | LSNumber | LSArray deriving(Show)
 

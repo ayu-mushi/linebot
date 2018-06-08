@@ -146,7 +146,7 @@ mainParser id_either = do
 
 memoParser :: (MonadIO m) => ParsecT String u m String
 memoParser = Parsec.try $ do
-  _ <- msum $ map string ["memo", "メモ", "m"]
+  _ <- msum $ map (Parsec.try . string) ["memo", "メモ", "m"]
   skipMany space
   text <- many anyToken
   isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
@@ -174,12 +174,12 @@ secondParser = Parsec.try $ do
 
 parrotParser ::  (Monad m) => ParsecT String u m String
 parrotParser = Parsec.try $ do
-  _ <- msum $ map string ["オウム", "parrot", "鏡", "mirror", "エコー", "echo", "p"]
+  _ <- msum $ map (Parsec.try . string) ["オウム", "parrot", "鏡", "mirror", "エコー", "echo", "p"]
   many anyToken
 
 sleepParser ::  (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
 sleepParser id_either = Parsec.try $ do
-  _ <- msum $ map string ["sleep", "眠れ", "眠る", "sl"]
+  _ <- msum $ map (Parsec.try . string) ["sleep", "眠れ", "眠る", "sl"]
   skipMany space
   numeric <- many1 digit <|> return "10"
   lift $ liftIO $ Prelude.writeFile "is_sleep.txt" $ show id_either
@@ -264,7 +264,7 @@ appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
 
 helpParser :: Monad m => ParsecT String u m String
 helpParser = Parsec.try $ do
-  _ <- msum $ map string ["help", "h"]
+  _ <- foldl1 (<|>) $ map (Parsec.try . string) ["help", "h"]
   Parsec.eof
 
   return $ appName <> "\

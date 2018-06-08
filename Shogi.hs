@@ -486,7 +486,7 @@ moveParser = do
 
 shogiParser :: (MonadIO m) => ParsecT String u m String
 shogiParser = Parsec.try $ do
-  _ <- string "sh" <|> string "shogi" <|> string "将棋"
+  _ <- string "shogi" <|> string "sh" <|> string "将棋"
   skipMany space
 
   str <- (do
