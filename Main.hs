@@ -37,6 +37,7 @@ import Post as Post
 import Get as Get
 import Text.Parsec as Parsec
 import qualified Shogi as Shogi  (shogiParser)
+import LineScript (lsParser)
 
 main :: IO ()
 main = do
@@ -65,8 +66,10 @@ main = do
       text $ Text.pack $ {-Shogi.shogiTest -}parsed
     get "/command/:options" $ do
       opt <- param "options"
-      Right str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser <|> Shogi.shogiParser) "" "" opt
-      text $ Text.pack str
+      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser <|> lsParser <|> Shogi.shogiParser) "" "" opt
+      case str of
+        Right str -> text $ Text.pack str
+        Left str -> text $ Text.pack $ show str
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body
@@ -143,15 +146,15 @@ mainParser id_either = do
 
 memoParser :: (MonadIO m) => ParsecT String u m String
 memoParser = Parsec.try $ do
-  _ <- msum $ map string ["m", "memo", "メモ"]
+  _ <- msum $ map string ["memo", "メモ", "m"]
   skipMany space
   text <- many anyToken
-  isthereMemo <- lift $ liftIO $ doesFileExist "memo.txt"
+  isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
   oldText <- if isthereMemo
-                then lift $ liftIO $ Strict.readFile "memo.txt"
+                then lift $ liftIO $ Strict.readFile "/tmp/memo.txt"
                 else return ""
-  lift $ liftIO $ oldText `deepseq` Prelude.writeFile "memo.txt" (text <> "\n ----- \n" <> oldText)
-  lift $ liftIO $ Strict.readFile "memo.txt"
+  lift $ liftIO $ oldText `deepseq` Prelude.writeFile "/tmp/memo.txt" (text <> "\n ----- \n" <> oldText)
+  lift $ liftIO $ Strict.readFile "/tmp/memo.txt"
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
@@ -171,31 +174,18 @@ secondParser = Parsec.try $ do
 
 parrotParser ::  (Monad m) => ParsecT String u m String
 parrotParser = Parsec.try $ do
-  _ <- msum $ map string ["p", "オウム", "parrot", "鏡", "mirror", "エコー", "echo"]
+  _ <- msum $ map string ["オウム", "parrot", "鏡", "mirror", "エコー", "echo", "p"]
   many anyToken
-
 
 sleepParser ::  (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
 sleepParser id_either = Parsec.try $ do
-  _ <- msum $ map string ["sl", "sleep", "眠れ", "眠る"]
+  _ <- msum $ map string ["sleep", "眠れ", "眠る", "sl"]
   skipMany space
   numeric <- many1 digit <|> return "10"
   lift $ liftIO $ Prelude.writeFile "is_sleep.txt" $ show id_either
   lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
   lift $ liftIO $ removeFile "is_sleep.txt"
   return ""
-
--- LINE Script
--- 機能候補: 名前からメッセージを送る機能
-
-lsParser ::  (Monad m) => ParsecT String u m String
-lsParser = Parsec.try $ do
-  _ <- msum $ map string ["l", "ls", "linescript"]
-  return ""
-
-data LSSentense a = DefVar a (LSSentense a) | InitVar a (LSFormula a) (LSSentense a) | Seq (LSSentense a) (LSSentense a) | Substitution a (LSFormula a)
-data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float
-data LSType = LSBool | LSString | LSNumber | LSArray
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 
@@ -274,7 +264,7 @@ appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
 
 helpParser :: Monad m => ParsecT String u m String
 helpParser = Parsec.try $ do
-  _ <- msum $ map string [ "h", "help"]
+  _ <- msum $ map string ["help", "h"]
   Parsec.eof
 
   return $ appName <> "\
