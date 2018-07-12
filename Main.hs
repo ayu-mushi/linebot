@@ -23,7 +23,6 @@ import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromStrin
 import Web.Scotty.Trans(ScottyError(..))
 import Web.Scotty.Internal.Types(ActionT(runAM, ActionT), ActionError)
 import Control.Lens
---import Text.JSON  as JSON(resultToEither, decode, showJSON, encode)
 import Data.Aeson as Aeson
 import Network.HTTP.Conduit
 import qualified Codec.Binary.UTF8.String as Codec(encode, decode, encodeString, decodeString)

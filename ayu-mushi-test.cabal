@@ -18,7 +18,7 @@ executable          ayu-mushi-test
                   , bytestring
                   , directory
                   , utf8-string
-                  , json
+                  --, json
                   , exceptions
                   , attoparsec
                   , containers
