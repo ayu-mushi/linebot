@@ -13,7 +13,7 @@ import qualified Data.Text.Lazy as Text(pack, unpack, Text, toStrict, fromStrict
 import qualified Data.Text as StrictText(pack)
 import Data.Text.IO as Text(writeFile, readFile)
 import qualified Data.ByteString.Lazy as BS (pack, unpack, writeFile, readFile, fromStrict, toStrict, ByteString)
-import qualified Data.ByteString as BSStrict (ByteString, pack, unpack)
+import qualified Data.ByteString as BSStrict (ByteString, pack, unpack, writeFile, readFile)
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO, lift, MonadIO)
 import Control.Exception (try, IOException, SomeException, throwIO)
@@ -32,6 +32,7 @@ import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message
 import Control.Monad.State(execStateT, runStateT, evalStateT)
 import Data.List(nub)
 import Control.DeepSeq(deepseq)
+import Data.Winery(Serialise(schemaVia, toEncoding, deserialiser), serialise, deserialise)
 
 import Post as Post
 import Get as Get
@@ -151,10 +152,10 @@ memoParser = Parsec.try $ do
   text <- many anyToken
   isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
   oldText <- if isthereMemo
-                then lift $ liftIO $ Strict.readFile "/tmp/memo.txt"
+                then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
                 else return ""
-  lift $ liftIO $ oldText `deepseq` Prelude.writeFile "/tmp/memo.txt" (text <> "\n ----- \n" <> oldText)
-  lift $ liftIO $ Strict.readFile "/tmp/memo.txt"
+  lift $ liftIO $ oldText `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ show (text <> "\n ----- \n" <> oldText))
+  lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
@@ -252,7 +253,9 @@ linePush channelAccessToken uid message = do
             }
             }
             ]
-            }-}
+            }
+-}
+
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
 
