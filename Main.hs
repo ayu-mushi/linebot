@@ -147,14 +147,43 @@ mainParser id_either = do
 memoParser :: (MonadIO m) => ParsecT String u m String
 memoParser = Parsec.try $ do
   _ <- msum $ map (Parsec.try . string) ["memo", "メモ", "m"]
-  skipMany space
-  text <- many anyToken
-  isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
-  oldText <- if isthereMemo
-                then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
-                else return ""
-  lift $ liftIO $ oldText `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ show (text <> "\n ----- \n" <> oldText))
-  lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
+  Parsec.try writeMemo <|> Parsec.try readMemo
+
+  where
+    readMemo = do
+      skipMany space
+      string "-r" <|> string ""
+      skipMany space
+      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
+      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
+                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
+                    else return ([],[])
+      case oldTextsB of
+          [] -> do
+            case (reverse $ oldTextsA) of
+              [] -> return "No memo yet."
+              (a:as) -> do
+                let result = show (([a], as) :: ([String], [String]))
+                lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ result)
+                return a
+          (b:bs) -> do
+            lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ show (b:oldTextsA, bs))
+            return b
+
+    writeMemo = do
+      skipMany space
+      string "-w"
+      skipMany space
+      text <- many anyToken
+      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
+      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
+                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
+                    else return ([],[])
+      let memos = show $ (text:oldTextsA, oldTextsB)
+      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
+      return text
+
+  -- queue
 
 mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
 mappMaybe may mapp =
