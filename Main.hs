@@ -147,7 +147,7 @@ mainParser id_either = do
 memoParser :: (MonadIO m) => ParsecT String u m String
 memoParser = Parsec.try $ do
   _ <- msum $ map (Parsec.try . string) ["memo", "メモ", "m"]
-  Parsec.try writeMemo <|> Parsec.try readMemo
+  Parsec.try writeMemo <|> Parsec.try stackMemo <|> Parsec.try readMemo
 
   where
     readMemo = do
@@ -180,6 +180,19 @@ memoParser = Parsec.try $ do
                     then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
                     else return ([],[])
       let memos = show $ (text:oldTextsA, oldTextsB)
+      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
+      return text
+
+    stackMemo = do
+      skipMany space
+      string "-s"
+      skipMany space
+      text <- many anyToken
+      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
+      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
+                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
+                    else return ([],[])
+      let memos = show $ (oldTextsA, text:oldTextsB)
       lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
       return text
 
