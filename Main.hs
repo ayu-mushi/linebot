@@ -179,7 +179,7 @@ memoParser = Parsec.try $ do
       (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
                     then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
                     else return ([],[])
-      let memos = show $ (text:oldTextsA, oldTextsB)
+      let memos = show $ (oldTextsA, text:oldTextsB)
       lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
       return text
 
@@ -308,4 +308,6 @@ helpParser = Parsec.try $ do
   \ \n「(shogi)|(将棋) init」: 将棋を最初からします。ex. '@shogi init'\
   \ \n「(shogi)|(将棋) display」: 将棋の現状態を表示します。オプション: reverseをつけると反転して表示します。ex. '@shogi display reverse'\
   \ \n「(shogi)|(将棋) [1-9][一-九][歩銀王..][右引寄打..]?」: 駒を動かします。ex. '@shogi 58金右'\
+  \ \n「memo -w (String)」: 文字列をメモに加える ex. '@memo -w あはは！'\
+  \ \n「memo -r」: メモを閲覧する ex. '@memo -r' → あはは！\
   \"
