@@ -179,7 +179,7 @@ memoParser = Parsec.try $ do
       (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
                     then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
                     else return ([],[])
-      let memos = show $ (oldTextsA, text:oldTextsB)
+      let memos = show $ (text:oldTextsA, oldTextsB)
       lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
       return text
 
