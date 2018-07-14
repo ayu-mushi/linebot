@@ -154,7 +154,8 @@ memoParser = Parsec.try $ do
       skipMany space
       string "-r" <|> string ""
       skipMany space
-      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
+      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt" -- ファイルに型がついてて欲しい
+      -- /tmp/memo.txt :: ([String], [String])
       (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
                     then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
                     else return ([],[])
