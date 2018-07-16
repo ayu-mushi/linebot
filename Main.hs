@@ -29,7 +29,7 @@ import qualified Codec.Binary.UTF8.String as Codec(encode, decode, encodeString,
 import Control.Concurrent (threadDelay)
 import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message), errorMessages)
 import Control.Monad.State(execStateT, runStateT, evalStateT)
-import Data.List(nub)
+import Data.List(nub, intercalate)
 import Control.DeepSeq(deepseq)
 import Data.Winery(Serialise(schemaVia, toEncoding, deserialiser), serialise, deserialise)
 
@@ -66,7 +66,7 @@ main = do
       text $ Text.pack $ {-Shogi.shogiTest -}parsed
     get "/command/:options" $ do
       opt <- param "options"
-      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser <|> lsParser <|> Shogi.shogiParser) "" "" opt
+      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser undefined <|> lsParser <|> Shogi.shogiParser) "" "" opt
       case str of
         Right str -> text $ Text.pack str
         Left str -> text $ Text.pack $ show str
@@ -141,13 +141,18 @@ mainParser id_either = do
        Left (a::IOException) -> return ()
        Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser <|> Shogi.shogiParser <|> lsParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser id_either <|> Shogi.shogiParser <|> lsParser
   return str
 
-memoParser :: (MonadIO m) => ParsecT String u m String
-memoParser = Parsec.try $ do
+memoParser :: (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
+memoParser id_either = Parsec.try $ do
   _ <- msum $ map (Parsec.try . string) ["memo", "メモ", "m"]
-  Parsec.try writeMemo <|> Parsec.try stackMemo <|> Parsec.try readMemo
+  Parsec.try writeMemo
+    <|> Parsec.try stackMemo
+    <|> Parsec.try prevMemo
+    <|> Parsec.try readAllMemo
+
+    <|> Parsec.try readMemo
 
   where
     readMemo = do
@@ -196,6 +201,28 @@ memoParser = Parsec.try $ do
       let memos = show $ (oldTextsA, text:oldTextsB)
       lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
       return text
+    prevMemo = do
+      skipMany space
+      string "-p"
+      skipMany space
+      text <- many anyToken
+      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
+      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
+                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
+                    else return ([],[])
+      let memos = show $ (oldTextsA, (head oldTextsB):text:(tail oldTextsB))
+      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
+      return text
+    readAllMemo = do
+      skipMany space
+      string "--all"
+      skipMany space
+      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
+      -- ファイルに型がついてて欲しい
+      -- /tmp/memo.txt :: ([String], [String])
+      if isthereMemo
+        then lift $ liftIO $ fmap (\(as::[String],bs::[String]) -> intercalate "\n\n" $ as ++ bs) $ fmap read $ Prelude.readFile "/tmp/memo.txt"
+        else return "no memo yet"
 
   -- queue
 
@@ -325,3 +352,6 @@ helpParser = Parsec.try $ do
   \ \n「memo -w (String)」: 文字列をメモに加える ex. '@memo -w あはは！'\
   \ \n「memo -r」: メモを閲覧する ex. '@memo -r' → あはは！\
   \"
+
+-- 一定時間でメモを回す
+-- どこにメモを出すか設定する
