@@ -159,70 +159,78 @@ memoParser id_either = Parsec.try $ do
       skipMany space
       string "-r" <|> string ""
       skipMany space
-      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt" -- ファイルに型がついてて欲しい
-      -- /tmp/memo.txt :: ([String], [String])
-      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
-                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
-                    else return ([],[])
+      (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
       case oldTextsB of
           [] -> do
             case (reverse $ oldTextsA) of
               [] -> return "No memo yet."
               (a:as) -> do
-                let result = show (([a], as) :: ([String], [String]))
-                lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ result)
+                let result = (([a], as) :: ([String], [String]))
+                lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile $ result)
                 return a
           (b:bs) -> do
-            lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ show (b:oldTextsA, bs))
+            lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile (b:oldTextsA, bs))
             return b
+    readAllMemo = do
+      skipMany space
+      string "--all"
+      skipMany space
+      lift $ liftIO $ (return . intercalate "\n\n" . uncurry (++)) & memoFile (return "no memo yet")
+
 
     writeMemo = do
       skipMany space
       string "-w"
       skipMany space
       text <- many anyToken
-      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
-      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
-                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
-                    else return ([],[])
-      let memos = show $ (text:oldTextsA, oldTextsB)
-      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
+      (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
+      let memos = (text:oldTextsA, oldTextsB)
+      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (writeMFile memos)
       return text
-
-    stackMemo = do
+    stackMemo = do -- stack write
       skipMany space
       string "-s"
       skipMany space
       text <- many anyToken
-      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
-      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
-                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
-                    else return ([],[])
-      let memos = show $ (oldTextsA, text:oldTextsB)
-      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
+      (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
+      let memos = (oldTextsA, text:oldTextsB)
+      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (writeMFile memos)
       return text
-    prevMemo = do
+    prevMemo = do -- prev write
       skipMany space
       string "-p"
       skipMany space
       text <- many anyToken
-      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
-      (oldTextsA::[String], oldTextsB::[String]) <- if isthereMemo
-                    then lift $ liftIO $ read <$> Prelude.readFile "/tmp/memo.txt"
-                    else return ([],[])
-      let memos = show $ (oldTextsA, (head oldTextsB):text:(tail oldTextsB))
-      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (Prelude.writeFile "/tmp/memo.txt" $ memos)
+      (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
+      let memos = (oldTextsA, (head oldTextsB):text:(tail oldTextsB))
+      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (writeMFile memos)
       return text
-    readAllMemo = do
-      skipMany space
-      string "--all"
-      skipMany space
-      isthereMemo <- lift $ liftIO $ doesFileExist "/tmp/memo.txt"
-      -- ファイルに型がついてて欲しい
-      -- /tmp/memo.txt :: ([String], [String])
+
+    -- ファイルにも型がついてて欲しい
+    -- /tmp/memo.txt :: ([String], [String])
+    memoFile :: IO a -> (([String], [String]) -> IO a) -> IO a
+    memoFile failed suc = do
+      isthereMemo <- doesFileExist "/tmp/memo.txt"
       if isthereMemo
-        then lift $ liftIO $ fmap (\(as::[String],bs::[String]) -> intercalate "\n\n" $ as ++ bs) $ fmap read $ Prelude.readFile "/tmp/memo.txt"
-        else return "no memo yet"
+        then do
+          (memos :: ([String], [String])) <- read <$> Prelude.readFile "/tmp/memo.txt"
+          suc memos
+        else failed
+        -- literal >>= f と同じ動作をするには？
+
+    writeMFile :: ([String], [String]) -> IO ()
+    writeMFile memos = deepseq memos $ Prelude.writeFile "/tmp/memo.txt" $ show memos
+
+    literalMemoFile :: MonadIO m => ParsecT String u m ([String], [String]) -- literal, without contexts.
+    literalMemoFile = lift $ liftIO $ return & (memoFile $ return ([], []))
+
+    withMFile :: IO () -> (([String], [String]) -> IO ([String], [String])) -> IO ()
+    withMFile exc f = ((>>= writeMFile) . f) & memoFile exc
+
+    -- IO の write と read をLensみたいにまとめられないのか
+    -- まとめて継続
+    -- まとめて、型をつける
+    -- Template Haskell
 
   -- queue
 
