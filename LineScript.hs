@@ -96,7 +96,7 @@ continueParser = do
   return Continue
 
 data LSSentence a = If (LSFormula a) (LSSentence a) | While (LSFormula a) (LSSentence a) | Continue | DefVar a | InitVar a (LSFormula a) | Substitution a (LSFormula a) | Seq [LSSentence a] deriving (Show)
-data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float deriving(Show)
-data LSType = LSBool | LSString | LSNumber | LSArray deriving(Show)
+data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float deriving (Show)
+data LSType = LSBool | LSString | LSNumber | LSArray deriving (Show)
 
 -- ()は式の結合の優先順位、{}は文の結合の優先順位

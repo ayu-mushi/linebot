@@ -31,6 +31,7 @@ import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message
 import Control.Monad.State(execStateT, runStateT, evalStateT)
 import Data.List(nub, intercalate)
 import Control.DeepSeq(deepseq)
+import Data.List.Split(splitOn)
 
 import Post as Post
 import Get as Get
@@ -69,6 +70,13 @@ main = do
       case str of
         Right str -> text $ Text.pack str
         Left str -> text $ Text.pack $ show str
+    post "/command" $ do
+      b <- body
+      str <- runParserT (mainParser undefined undefined) "" "" $ BsUtf8.toString b
+      case str of
+        Right str -> text $ Text.pack str
+        Left str -> text $ Text.pack $ show str
+
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body
@@ -143,13 +151,14 @@ mainParser channelAccessToken id_either = do
   str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser channelAccessToken id_either <|> Shogi.shogiParser <|> lsParser
   return str
 
-memoParser :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
+memoParser :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
 memoParser channelAccessToken id_either = Parsec.try $ do
   _ <- msum $ map (Parsec.try . string) ["memo", "メモ", "m"]
   Parsec.try writeMemo
     <|> Parsec.try stackMemo
     <|> Parsec.try prevMemo
     <|> Parsec.try readAllMemo
+    <|> Parsec.try writeAllMemo
 
     <|> Parsec.try setAlarm
     <|> Parsec.try getAlarm
@@ -212,6 +221,14 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       skipMany space
       lift $ liftIO $ (return . intercalate "\n\n" . uncurry (++)) & memoFile (return "no memo yet")
 
+    writeAllMemo = do
+      skipMany space
+      string "--write-all"
+      skipMany space
+      text <- many anyToken
+      let queue = (reverse $ splitOn "------" text, []) :: ([String], [String])
+      lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
+      return "Added."
 
     writeMemo = do
       skipMany space
@@ -374,8 +391,15 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
 appName :: String
 appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
 
--- なつくようにする
--- 時計
+-- * なつくようにする
+-- * 時計
+-- * 一定時間でメモを回す
+-- * どこにメモを出すか設定する
+-- * ari3_bot的に状態を保持し、ゲームとかする
+-- * フランベシアちゃん登録者同士での友達登録を容易にする
+-- * Wikipedia DBPedia を利用 https://qiita.com/pika_shi/items/eb56fc205e2d670062ae
+-- * 図書館情報
+-- * Monkey Bench https://readingmonkey.blog.fc2.com/blog-entry-769.html
 
 helpParser :: Monad m => ParsecT String u m String
 helpParser = Parsec.try $ do
@@ -395,9 +419,3 @@ helpParser = Parsec.try $ do
   \ \n「memo -w (String)」: 文字列をメモに加える ex. '@memo -w あはは！'\
   \ \n「memo -r」: メモを閲覧する ex. '@memo -r' → あはは！\
   \"
-
--- 一定時間でメモを回す
--- どこにメモを出すか設定する
---
-
--- ari3_bot的に状態を保持し、ゲームとかする

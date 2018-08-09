@@ -29,3 +29,4 @@ executable          ayu-mushi-test
                   , strict
                   , deepseq
                   , relational-query
+                  , split
