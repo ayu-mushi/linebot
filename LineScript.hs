@@ -75,7 +75,7 @@ lsParser = Parsec.try $ do
   sent <- seqParser
   return $ show sent
 
-seqSentParser :: (Monad m) => ParsecT String u m (LSSentence String)
+seqSentParser :: (Monad m) => ParsecT String u m (LSSentence String) -- 二重は?
 seqSentParser = do
   char '{'
   skipMany space
@@ -90,12 +90,12 @@ seqSentParser = do
     t <- seqParser
     return $ s:t
 
-breakParser :: (Monad m) => ParsecT String u m (LSSentence String)
-breakParser = do
-  string "break"
-  return Break
+continueParser :: (Monad m) => ParsecT String u m (LSSentence String)
+continueParser = do
+  string "continue"
+  return Continue
 
-data LSSentence a = If (LSFormula a) (LSSentence a) | Break | DefVar a | InitVar a (LSFormula a) | Substitution a (LSFormula a) | Seq [LSSentence a] deriving (Show)
+data LSSentence a = If (LSFormula a) (LSSentence a) | While (LSFormula a) (LSSentence a) | Continue | DefVar a | InitVar a (LSFormula a) | Substitution a (LSFormula a) | Seq [LSSentence a] deriving (Show)
 data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float deriving(Show)
 data LSType = LSBool | LSString | LSNumber | LSArray deriving(Show)
 

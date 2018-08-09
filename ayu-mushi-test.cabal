@@ -28,5 +28,4 @@ executable          ayu-mushi-test
                   , parsec
                   , strict
                   , deepseq
-                  , winery
                   , relational-query

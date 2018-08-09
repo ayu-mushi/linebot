@@ -31,7 +31,6 @@ import Text.Parsec.Error as Parsec(Message(UnExpect, Expect,SysUnExpect, Message
 import Control.Monad.State(execStateT, runStateT, evalStateT)
 import Data.List(nub, intercalate)
 import Control.DeepSeq(deepseq)
-import Data.Winery(Serialise(schemaVia, toEncoding, deserialiser), serialise, deserialise)
 
 import Post as Post
 import Get as Get
@@ -152,9 +151,24 @@ memoParser id_either = Parsec.try $ do
     <|> Parsec.try prevMemo
     <|> Parsec.try readAllMemo
 
+    <|> Parsec.try setAlarm
+    <|> Parsec.try getAlarm
     <|> Parsec.try readMemo
 
   where
+    setAlarm = do
+      skipMany space
+      string "--set"
+      skipMany space
+      lift $ liftIO $ Prelude.writeFile "/tmp/id_either" $ show $ id_either
+      return "We setted alarm."
+
+    getAlarm = do
+      skipMany space
+      string "--get"
+      skipMany space
+      lift $ liftIO $ Prelude.readFile "/tmp/id_either"
+
     readMemo = do
       skipMany space
       string "-r" <|> string ""
@@ -162,7 +176,7 @@ memoParser id_either = Parsec.try $ do
       (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
       case oldTextsB of
           [] -> do
-            case (reverse $ oldTextsA) of
+            case (reverse oldTextsA) of
               [] -> return "No memo yet."
               (a:as) -> do
                 let result = (([a], as) :: ([String], [String]))
@@ -363,3 +377,6 @@ helpParser = Parsec.try $ do
 
 -- 一定時間でメモを回す
 -- どこにメモを出すか設定する
+--
+
+-- ari3_bot的に状態を保持し、ゲームとかする

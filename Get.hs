@@ -75,6 +75,7 @@ instance ToJSON Reply where
 instance ToJSON Push where
   toJSON v = object ["to" .= (either unGroupId unUserId $ v ^. pushTo),
                      "messages" .= (v ^. pushMess)]
+
 defMessage :: Message
 defMessage = Message "text" ""
 
