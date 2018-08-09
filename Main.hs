@@ -296,9 +296,11 @@ secondParser :: (MonadIO m) => ParsecT String u m String
 secondParser = Parsec.try $ do
   numeric <- Parsec.many1 Parsec.digit <?> "\"list of digit\""
   Parsec.string "秒後"
-  Parsec.eof
+  skipMany space
+  comm <- many anyToken
   lift $ liftIO $ threadDelay $ read numeric * (10^6)
-  return $ numeric ++ "秒経過しました！！！！"
+  resp <- liftIO $ selfPost comm
+  return $ numeric ++ "秒経過しました！！！！"  ++ "\n\n"++ BsUtf8.toString (responseBody resp)
 
 -- try の位置を変える
 
@@ -351,6 +353,20 @@ linePush channelAccessToken uid message = do
         , ("Authorization", bearer channelAccessToken)
         ]
     , requestBody = RequestBodyLBS $ encode $ defPushTextEither uid message
+    }
+  manager <- liftIO $ newManager tlsManagerSettings
+  httpLbs postRequest manager
+
+selfPost :: (MonadIO m, MonadThrow m) => String -> m (Response BS.ByteString)
+selfPost message = do
+  req <- parseUrl "http://ayu-mushi-test.herokuapp.com/command"
+  let postRequest = req {
+    method = "POST"
+    , requestHeaders =
+      [ ("Content-Type", "application/json; charser=UTF-8")
+        --, ("Authorization", bearer channelAccessToken)
+        ]
+    , requestBody = RequestBodyLBS $ BsUtf8.fromString message
     }
   manager <- liftIO $ newManager tlsManagerSettings
   httpLbs postRequest manager
