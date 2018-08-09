@@ -65,7 +65,7 @@ main = do
       text $ Text.pack $ {-Shogi.shogiTest -}parsed
     get "/command/:options" $ do
       opt <- param "options"
-      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser undefined <|> lsParser <|> Shogi.shogiParser) "" "" opt
+      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser undefined undefined <|> lsParser <|> Shogi.shogiParser) "" "" opt
       case str of
         Right str -> text $ Text.pack str
         Left str -> text $ Text.pack $ show str
@@ -83,17 +83,17 @@ main = do
       let (Right typ) = fmap (^. Post.evType) lineev
 
       if (typ == "join") then do
-        strMay <- runParserT (mainParser line_id) "" "" "☆help"
+        strMay <- runParserT (mainParser channelAccessToken line_id) "" "" "☆help"
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
       else if (typ == "follow") then do
-        strMay <- runParserT (mainParser line_id) "" "" "☆help"
+        strMay <- runParserT (mainParser channelAccessToken line_id) "" "" "☆help"
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
       else if (typ == "message") then do
         let (Right (Just message)) = fmap (^. Post.evMessage) lineev
         let text = message ^. Post.msText
-        strMay <- runParserT (mainParser line_id) "" "" text
+        strMay <- runParserT (mainParser channelAccessToken line_id) "" "" text
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
       else return ()
@@ -133,18 +133,18 @@ errorParser = do
   eof
   return xxx
 
-mainParser  :: (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
-mainParser id_either = do
+mainParser  :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
+mainParser channelAccessToken id_either = do
   str <- lift $ liftIO $ Control.Exception.try $ Prelude.readFile "is_sleep.txt"
   case str of
        Left (a::IOException) -> return ()
        Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser id_either <|> Shogi.shogiParser <|> lsParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser channelAccessToken id_either <|> Shogi.shogiParser <|> lsParser
   return str
 
-memoParser :: (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
-memoParser id_either = Parsec.try $ do
+memoParser :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
+memoParser channelAccessToken id_either = Parsec.try $ do
   _ <- msum $ map (Parsec.try . string) ["memo", "メモ", "m"]
   Parsec.try writeMemo
     <|> Parsec.try stackMemo
@@ -153,6 +153,7 @@ memoParser id_either = Parsec.try $ do
 
     <|> Parsec.try setAlarm
     <|> Parsec.try getAlarm
+    <|> Parsec.try sendMemoTo
     <|> Parsec.try readMemo
 
   where
@@ -168,6 +169,26 @@ memoParser id_either = Parsec.try $ do
       string "--get"
       skipMany space
       lift $ liftIO $ Prelude.readFile "/tmp/id_either"
+
+    sendMemoTo = do
+      skipMany space
+      string "-r" <|> string ""
+      skipMany space
+      (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
+      (target_id_either :: Either GroupId UserId) <- lift $ liftIO $ read <$> Prelude.readFile "/tmp/id_either"
+      case oldTextsB of
+          [] -> do
+            case (reverse oldTextsA) of
+              [] -> return "No memo yet."
+              (a:as) -> do
+                let result = (([a], as) :: ([String], [String]))
+                lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile $ result)
+                lift $ linePush channelAccessToken id_either $ "from " <> show id_either <> ":" <> a
+                return $ show target_id_either <> "is sent to that: " <> a
+          (b:bs) -> do
+            lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile (b:oldTextsA, bs))
+            lift $ linePush channelAccessToken id_either $ "from " <> show id_either <> ":" <> b
+            return $ show target_id_either <> "is sent to that: " <> b
 
     readMemo = do
       skipMany space
@@ -303,7 +324,7 @@ lineReply channelAccessToken rep_tok message = do
   manager <- liftIO $ newManager tlsManagerSettings
   httpLbs postRequest manager
 
-linePush :: (ScottyError e) => AccessToken -> Either GroupId UserId -> String -> ActionT e IO (Response BS.ByteString)
+linePush :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> String -> m (Response BS.ByteString)
 linePush channelAccessToken uid message = do
   req <- parseUrl "https://api.line.me/v2/bot/message/push"
   let postRequest = req {
