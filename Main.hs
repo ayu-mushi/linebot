@@ -172,7 +172,7 @@ memoParser channelAccessToken id_either = Parsec.try $ do
 
     sendMemoTo = do
       skipMany space
-      string "-r" <|> string ""
+      string "--send"
       skipMany space
       (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
       (target_id_either :: Either GroupId UserId) <- lift $ liftIO $ read <$> Prelude.readFile "/tmp/id_either"
