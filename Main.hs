@@ -184,11 +184,11 @@ memoParser channelAccessToken id_either = Parsec.try $ do
                 let result = (([a], as) :: ([String], [String]))
                 lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile $ result)
                 lift $ linePush channelAccessToken target_id_either $ "from " <> show id_either <> ":" <> a
-                return $ show target_id_either <> "is sent to that: " <> a
+                return $ "Received:" <> a <> "(from: " <> show target_id_either <> ")"
           (b:bs) -> do
             lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile (b:oldTextsA, bs))
             lift $ linePush channelAccessToken target_id_either $ "from " <> show id_either <> ":" <> b
-            return $ show target_id_either <> "is sent to that: " <> b
+            return $ "Received:" <> b <> "(from: " <> show target_id_either <> ")"
 
     readMemo = do
       skipMany space
