@@ -72,6 +72,7 @@ main = do
         Left str -> text $ Text.pack $ show str
     post "/command" $ do
       b <- body
+      Just pass <- liftIO $ lookupEnv "PASSWORD"
       str <- runParserT (mainParser undefined undefined) "" "" $ BsUtf8.toString b
       case str of
         Right str -> text $ Text.pack str
@@ -105,6 +106,8 @@ main = do
         linePush channelAccessToken line_id $ either ifError id strMay
         return ()
       else return ()
+
+-- TODO: LINEから送られてくるJSONを自分で生成して、ローカルでもテストできるようにする
 
 mapParseError :: (String -> String) -> Parsec.Message -> Parsec.Message
 mapParseError f err =
@@ -192,12 +195,12 @@ memoParser channelAccessToken id_either = Parsec.try $ do
               (a:as) -> do
                 let result = (([a], as) :: ([String], [String]))
                 lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile $ result)
-                lift $ linePush channelAccessToken target_id_either $ "from " <> show id_either <> ":" <> a
-                return $ "Received:" <> a <> "(from: " <> show target_id_either <> ")"
+                lift $ linePush channelAccessToken target_id_either $  a <> "(from other)"
+                return $ "Send:" <> a <> "(to: " <> show target_id_either <> ")"
           (b:bs) -> do
             lift $ liftIO $ oldTextsB `deepseq` oldTextsA `deepseq` (writeMFile (b:oldTextsA, bs))
-            lift $ linePush channelAccessToken target_id_either $ "from " <> show id_either <> ":" <> b
-            return $ "Received:" <> b <> "(from: " <> show target_id_either <> ")"
+            lift $ linePush channelAccessToken target_id_either $ b <> "(from other)"
+            return $ "Send:" <> b <> "(to: " <> show target_id_either <> ")"
 
     readMemo = do
       skipMany space
