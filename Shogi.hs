@@ -148,6 +148,8 @@ initialField = let later_field = pawnList `Map.union` symmetric_part `Map.union`
 moveMap :: Ord i => i -> i -> Map.Map i a -> Map.Map i a
 moveMap i j mp = let a = mp ! i in insert j a $ Map.delete i mp
 
+-- symmMove
+
 moveMapZero :: (Ord i, MonadPlus m) => i -> i -> Map.Map i a -> m (Map.Map i a)
 moveMapZero i j mp = let x = Map.lookup i mp in
   case x of
@@ -512,6 +514,9 @@ shogiParser = Parsec.try $ do
       return $ concatMap ((++"\n").Shogi.showField) $ (old_field :: [Shogi.Field])
       )
   return str
+
+-- html version
+
 
 -- \f -> foldl (&&) True . map f
 

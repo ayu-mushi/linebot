@@ -63,7 +63,7 @@ main = do
     get "/shogi/:move" $ do
       mv <- param "move"
       Right parsed <- runParserT Shogi.shogiParser "" "" $ "shogi " <> mv
-      text $ Text.pack $ {-Shogi.shogiTest -}parsed
+      html $ Text.pack $ {-Shogi.shogiTest -}parsed
     get "/command/:options" $ do
       opt <- param "options"
       str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser undefined undefined <|> lsParser <|> Shogi.shogiParser) "" "" opt
@@ -225,10 +225,18 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       skipMany space
       string "--write-all"
       skipMany space
+      string "--password"
+      inputPass <- many anyToken
+      Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
+      skipMany space
+      string "--contents"
       text <- many anyToken
-      let queue = (reverse $ splitOn "------" text, []) :: ([String], [String])
-      lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
-      return "Added."
+
+      if (inputPass == realPass) then do
+        let queue = (reverse $ splitOn "------" text, []) :: ([String], [String])
+        lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
+        return "Added."
+      else return "input password is invalid."
 
     writeMemo = do
       skipMany space
@@ -404,9 +412,6 @@ selfPost message = do
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
 
-appName :: String
-appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
-
 -- * なつくようにする
 -- * 時計
 -- * 一定時間でメモを回す
@@ -417,10 +422,12 @@ appName = "天才フランベシアちゃん(人工無脳) ver 0.1."
 -- * 図書館情報
 -- * Monkey Bench https://readingmonkey.blog.fc2.com/blog-entry-769.html
 
-helpParser :: Monad m => ParsecT String u m String
+helpParser :: MonadIO m => ParsecT String u m String
 helpParser = Parsec.try $ do
   _ <- foldl1 (<|>) $ map (Parsec.try . string) ["help", "h"]
   Parsec.eof
+
+  Just appName <- lift $ liftIO $ lookupEnv "APPNAME"
 
   return $ appName <> "\
   \ \nhelp: [☆$λ@%:]で始まるメッセージを認識します。\
