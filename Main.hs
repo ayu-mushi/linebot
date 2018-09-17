@@ -226,12 +226,13 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       string "--write-all"
       skipMany space
       string "--password"
-      inputPass <- many anyToken
-      Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
+      skipMany space
+      inputPass <- many1 $ letter <|> digit
       skipMany space
       string "--contents"
       text <- many anyToken
 
+      Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
       if (inputPass == realPass) then do
         let queue = (reverse $ splitOn "------" text, []) :: ([String], [String])
         lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
