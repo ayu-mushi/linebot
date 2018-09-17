@@ -66,13 +66,14 @@ main = do
       html $ Text.pack $ {-Shogi.shogiTest -}parsed
     get "/command/:options" $ do
       opt <- param "options"
-      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser undefined undefined <|> lsParser <|> Shogi.shogiParser) "" "" opt
+      Just pass <- liftIO $ lookupEnv "PASSWORD"
+      channelAccessToken <- lift accessToken
+      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken undefined <|> lsParser <|> Shogi.shogiParser) "" "" opt
       case str of
         Right str -> text $ Text.pack str
         Left str -> text $ Text.pack $ show str
     post "/command" $ do
       b <- body
-      Just pass <- liftIO $ lookupEnv "PASSWORD"
       str <- runParserT (mainParser undefined undefined) "" "" $ BsUtf8.toString b
       case str of
         Right str -> text $ Text.pack str
@@ -180,7 +181,13 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       skipMany space
       string "--get"
       skipMany space
-      lift $ liftIO $ Prelude.readFile "/tmp/id_either"
+      string "--password"
+      skipMany space
+      inputPass <- many1 $ letter <|> digit
+      Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
+      if (inputPass == realPass)
+         then do lift $ liftIO $ Prelude.readFile "/tmp/id_either"
+      else return "the pass seem to be wrong.."
 
     sendMemoTo = do
       skipMany space
@@ -425,6 +432,7 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
 -- * Wikipedia DBPedia を利用 https://qiita.com/pika_shi/items/eb56fc205e2d670062ae
 -- * 図書館情報
 -- * Monkey Bench https://readingmonkey.blog.fc2.com/blog-entry-769.html
+-- 対話式インターフェース
 
 helpParser :: MonadIO m => ParsecT String u m String
 helpParser = Parsec.try $ do
