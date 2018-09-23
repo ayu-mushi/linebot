@@ -156,15 +156,27 @@ mainParser channelAccessToken id_either = do
   str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser channelAccessToken id_either <|> Shogi.shogiParser <|> lsParser
   return str
 
+requirePassword :: (MonadIO m) => ParsecT String u m Bool
+requirePassword = do
+  string "--password"
+  skipMany space
+  inputPass <- many1 $ letter <|> digit
+  Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
+  return (inputPass == realPass)
+
+
 memoParser :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
 memoParser channelAccessToken id_either = Parsec.try $ do
   _ <- msum $ map (Parsec.try . string) ["memo", "メモ", "m"]
   Parsec.try writeMemo
     <|> Parsec.try stackMemo
     <|> Parsec.try prevMemo
+    <|> Parsec.try readAllMemoLiterally
     <|> Parsec.try readAllMemo
+    <|> Parsec.try writeAllMemoLiterally
     <|> Parsec.try writeAllMemo
 
+    <|> Parsec.try setAlarmLiterally
     <|> Parsec.try setAlarm
     <|> Parsec.try getAlarm
     <|> Parsec.try sendMemoTo
@@ -178,17 +190,27 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       lift $ liftIO $ Prelude.writeFile "/tmp/id_either" $ show $ id_either
       return "We setted alarm."
 
+    setAlarmLiterally :: (Monad m, MonadIO m, MonadThrow m) => ParsecT String u m String
+    setAlarmLiterally = do
+      skipMany space
+      string "--set-literally"
+      skipMany space
+      isOK <- requirePassword
+      skipMany space
+      if isOK then do
+        id_either__ <- many anyToken
+        lift $ liftIO $ Prelude.writeFile "/tmp/id_either" $ id_either__
+        return $ "hehe:" ++ id_either__
+      else return "the pass seem to be wrong.."
+
     getAlarm = do
       skipMany space
       string "--get"
       skipMany space
-      string "--password"
-      skipMany space
-      inputPass <- many1 $ letter <|> digit
-      Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
-      if (inputPass == realPass)
-         then do lift $ liftIO $ Prelude.readFile "/tmp/id_either"
-      else return "the pass seem to be wrong.."
+      isOK <- requirePassword
+      if isOK
+        then lift $ liftIO $ Prelude.readFile "/tmp/id_either"
+        else return "the pass seem to be wrong.."
 
     sendMemoTo = do
       skipMany space
@@ -230,11 +252,40 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       skipMany space
       string "--all"
       skipMany space
-      lift $ liftIO $ (return . intercalate "\n\n" . uncurry (++)) & memoFile (return "no memo yet")
-
+      string "--split"
+      skipMany space
+      split <- many1 $ satisfy (/=' ')
+      lift $ liftIO $ (return . intercalate split . uncurry (++)) & memoFile (return "no memo yet")
+    readAllMemoLiterally = do
+      skipMany space
+      string "--all-literally"
+      skipMany space
+      lift $ liftIO $ (return . show) {-(return . intercalate "------" . uncurry (++))-} & memoFile (return "no memo yet")
     writeAllMemo = do
       skipMany space
       string "--write-all"
+      skipMany space
+      string "--password"
+      skipMany space
+      inputPass <- many1 $ letter <|> digit
+      skipMany space
+      string "--split"
+      skipMany space
+      split <- many1 $ satisfy (/=' ')
+      skipMany space
+      string "--contents"
+      text <- many anyToken
+
+      Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
+      if (inputPass == realPass) then do
+        let queue = (reverse $ splitOn split text, []) :: ([String], [String])
+        lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
+        return "Added."
+      else return "input password is invalid."
+
+    writeAllMemoLiterally = do
+      skipMany space
+      string "--write-all-literally"
       skipMany space
       string "--password"
       skipMany space
@@ -244,10 +295,13 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       text <- many anyToken
 
       Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
-      if (inputPass == realPass) then do
+      if (inputPass == realPass) then do{-
         let queue = (reverse $ splitOn "------" text, []) :: ([String], [String])
         lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
-        return "Added."
+        return "Added."-}
+        let queue = (read text) :: ([String], [String])
+        lift $ liftIO $ fst queue `deepseq` (writeMFile queue)
+        return $ show queue
       else return "input password is invalid."
 
     writeMemo = do
