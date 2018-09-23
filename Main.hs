@@ -74,7 +74,8 @@ main = do
         Left str -> text $ Text.pack $ show str
     post "/command" $ do
       b <- body
-      str <- runParserT (mainParser undefined undefined) "" "" $ BsUtf8.toString b
+      channelAccessToken <- lift accessToken
+      str <- runParserT (mainParser channelAccessToken undefined) "" "" $ BsUtf8.toString b
       case str of
         Right str -> text $ Text.pack str
         Left str -> text $ Text.pack $ show str
