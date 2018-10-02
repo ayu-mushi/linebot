@@ -50,7 +50,7 @@ interc' :: Char -> String -> String
 interc' c str = intercalate [c] (map return str)
 
 showGraphicalYear :: Int -> String
-showGraphicalYear y = intercalate "\n" $ (interc' ' ' $ show y) : ((take 3 resultDeluted) ++ ["----"] ++ (drop 3 $ take 6 resultDeluted) ++ ["----"] ++ (drop 6 resultDeluted))
+showGraphicalYear y = intercalate "\n" $ (interc' '□' $ show y) : ((take 3 resultDeluted) ++ ["----"] ++ (drop 3 $ take 6 resultDeluted) ++ ["----"] ++ (drop 6 resultDeluted))
   where
     ns :: [Int]
     ns = map ((read::String->Int) . (\x -> [x])) $ show y
@@ -58,10 +58,10 @@ showGraphicalYear y = intercalate "\n" $ (interc' ' ' $ show y) : ((take 3 resul
     fs = map replicate ns
 
     rs :: [String]
-    rs = map ($ '□') fs
+    rs = map ($ '⬛') fs
 
     water :: [String] -> String
-    water strs = map (const ' ') $ mostLong strs
+    water strs = map (const '□') $ mostLong strs
 
     dilute :: [String] -> [String]
     dilute strs = map (flip overwrite $ water strs) strs
@@ -81,10 +81,10 @@ showGraphicalYear y = intercalate "\n" $ (interc' ' ' $ show y) : ((take 3 resul
                           | length s1 > length s2 = mostLong $ s1:ss
 
     result :: [String]
-    result = map (interc' ' ') $ reverse $ transpose whiteAndBlank
+    result = map (interc' '□') $ reverse $ transpose whiteAndBlank
 
     resultDeluted :: [String]
-    resultDeluted = reverse $ overwrite (reverse result) (replicate 9 [' '])
+    resultDeluted = reverse $ overwrite (reverse result) (replicate 9 ['□'])
 
 toMelody :: Year -> [String]
 toMelody (BCyear n) = map toTone $ show n
@@ -128,5 +128,5 @@ century getArgs putStrLn = do
   putStrLn "-----\n"
   putStrLn $ showGraphicalYear $ read $ dropWhile isAlpha y
   putStrLn "-----"
-  putStrLn $ intercalate " " $ toMelody $ parseYear y
-  putStrLn $ intercalate " " $ toEmozy $ parseYear y
+  putStrLn $ intercalate " " $ toMelody $ parseYear y
+  putStrLn $ intercalate " " $ toEmozy $ parseYear y
