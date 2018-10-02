@@ -8,7 +8,7 @@ executable          ayu-mushi-test
     main-is:        Main.hs
     ghc-options:    -Wall -threaded -O2 -rtsopts -with-rtsopts=-N
     extensions:     OverloadedStrings
-    other-modules:  Post, Get, Shogi, LineScript
+    other-modules:  Post, Get, Shogi, LineScript, Century
     build-depends:  base   >= 4      && < 5
                   , scotty
                   ,http-types
