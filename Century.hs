@@ -58,7 +58,7 @@ showGraphicalYear y = intercalate "\n" $ (interc' '□' $ show y) : ((take 3 res
     fs = map replicate ns
 
     rs :: [String]
-    rs = map ($ '⬛') fs
+    rs = map ($ '■') fs
 
     water :: [String] -> String
     water strs = map (const '□') $ mostLong strs
@@ -96,16 +96,16 @@ toEmozy (ACyear n) = map toEmoji $ show n
 
 
 toTone :: Char -> String
-toTone '0' = "Cb"
-toTone '1' = "C"
-toTone '2' = "D"
-toTone '3' = "E"
-toTone '4' = "F"
-toTone '5' = "G"
-toTone '6' = "A"
-toTone '7' = "B"
-toTone '8' = "^C"
-toTone '9' = "^D"
+toTone '0' = "ﾄﾞb"
+toTone '1' = "ﾄﾞ"
+toTone '2' = "ﾚ"
+toTone '3' = "ﾐ"
+toTone '4' = "ﾌｧ"
+toTone '5' = "ｿ"
+toTone '6' = "ﾗ"
+toTone '7' = "ｼ"
+toTone '8' = "^ﾄﾞ"
+toTone '9' = "^ﾚ"
 
 toEmoji :: Char -> String
 toEmoji '0' = "🍹"
