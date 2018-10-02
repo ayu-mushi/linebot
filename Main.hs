@@ -32,6 +32,9 @@ import Control.Monad.State(execStateT, runStateT, evalStateT)
 import Data.List(nub, intercalate)
 import Control.DeepSeq(deepseq)
 import Data.List.Split(splitOn)
+import Text.Read(readMaybe)
+import Century (century)
+import Control.Monad.Writer(runWriter,tell)
 
 import Post as Post
 import Get as Get
@@ -66,19 +69,28 @@ main = do
       html $ Text.pack $ {-Shogi.shogiTest -}parsed
     get "/command/:options" $ do
       opt <- param "options"
-      Just pass <- liftIO $ lookupEnv "PASSWORD"
+      Just (defaultAccount::String) <- liftIO $ lookupEnv "DEFAULT_ACCOUNT"
       channelAccessToken <- lift accessToken
-      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken undefined <|> lsParser <|> Shogi.shogiParser) "" "" opt
-      case str of
-        Right str -> text $ Text.pack str
-        Left str -> text $ Text.pack $ show str
+      let acc = readMaybe defaultAccount :: Maybe (Either GroupId UserId)
+      case acc of
+         Just ac -> do
+           str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken ac <|> lsParser <|> Shogi.shogiParser <|> centuryParser) "" "" opt
+           case str of
+              Right str -> text $ Text.pack str
+              Left str -> text $ Text.pack $ show str
+         Nothing -> fail defaultAccount
     post "/command" $ do
       b <- body
       channelAccessToken <- lift accessToken
-      str <- runParserT (mainParser channelAccessToken undefined) "" "" $ BsUtf8.toString b
-      case str of
-        Right str -> text $ Text.pack str
-        Left str -> text $ Text.pack $ show str
+      Just (defaultAccount :: String) <- liftIO $ lookupEnv "DEFAULT_ACCOUNT"
+      let acc = readMaybe defaultAccount :: Maybe (Either GroupId UserId)
+      case acc of
+         Just ac -> do
+            str <- runParserT (mainParser channelAccessToken ac) "" "" $ BsUtf8.toString b
+            case str of
+              Right str -> text $ Text.pack str
+              Left str -> text $ Text.pack $ show str
+         Nothing -> fail defaultAccount
 
     post "/callback" $ do
       channelAccessToken <- lift accessToken
@@ -153,7 +165,7 @@ mainParser channelAccessToken id_either = do
        Left (a::IOException) -> return ()
        Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser channelAccessToken id_either <|> Shogi.shogiParser <|> lsParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser channelAccessToken id_either <|> Shogi.shogiParser <|> lsParser <|> centuryParser
   return str
 
 requirePassword :: (MonadIO m) => ParsecT String u m Bool
@@ -392,6 +404,23 @@ sleepParser id_either = Parsec.try $ do
   lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
   lift $ liftIO $ removeFile "is_sleep.txt"
   return ""
+
+centuryParser :: (MonadIO m) => ParsecT String u m String
+centuryParser = Parsec.try $ do
+  _ <- string "century"
+  c <- centuries
+  let (_, cs) = runWriter $ century (return c) (\x -> tell [x])
+  return $ intercalate "\n" cs
+  where
+    centuries = Parsec.try (eof >> return []) <|> mainCentury
+    mainCentury = do
+      skipMany space
+      nengou <- many1 $ satisfy (/=' ')
+      skipMany space
+      nengous <- centuries
+      return (nengou:nengous)
+
+
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 
