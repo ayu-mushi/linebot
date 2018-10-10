@@ -3,6 +3,7 @@ module Century (century) where
 import System.Environment(getArgs)
 import Data.List (intersperse, transpose, intercalate)
 import Data.Char (isAlpha)
+import Prelude hiding (putStrLn)
 
 yr2cent :: Int -> Int
 yr2cent year = ((year-1) `div` 100) + 1
@@ -119,14 +120,17 @@ toEmoji '7' = "🐦"
 toEmoji '8' = "🐙"
 toEmoji '9' = "🐳"
 
-
-century :: (Monad m) => (m [String]) -> (String -> m ()) -> m ()
-century getArgs putStrLn = do
-  years@(y:ys) <- getArgs
-  let ys = map parseYear years
+year :: (Monad m) => (String -> m ()) -> String -> m ()
+year putStrLn y = do
   putStrLn $ (show $ parseYear y) ++ "(" ++ (show $ year2cent $ parseYear y) ++ ")"
   putStrLn "-----\n"
   putStrLn $ showGraphicalYear $ read $ dropWhile isAlpha y
   putStrLn "-----"
   putStrLn $ intercalate " " $ toMelody $ parseYear y
   putStrLn $ intercalate " " $ toEmozy $ parseYear y
+
+century :: (Monad m) => (m [String]) -> (String -> m ()) -> m ()
+century getArgs putStrLn = do
+  years <- getArgs
+  --let ys = map parseYear years
+  mapM_ (year putStrLn) years

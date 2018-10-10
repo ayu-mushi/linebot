@@ -17,7 +17,7 @@ import qualified Data.ByteString as BSStrict (ByteString, pack, unpack, writeFil
 import qualified Data.Text.Encoding  as Text(decodeUtf8)
 import Control.Monad.Trans(liftIO, lift, MonadIO)
 import Control.Exception (try, IOException, SomeException, throwIO)
-import Control.Monad (mplus, mzero, MonadPlus, msum)
+import Control.Monad (mplus, mzero, MonadPlus, msum, foldM)
 import Control.Monad.Catch as MonadCatch (catch, try, MonadCatch(..), Exception, MonadThrow, throwM)
 import qualified Data.ByteString.Lazy.UTF8 as BsUtf8 (foldl, toString, fromString)
 import Web.Scotty.Trans(ScottyError(..))
@@ -131,6 +131,12 @@ mapParseError f err =
     UnExpect x -> Expect $ f x
     Parsec.Message x -> Parsec.Message $ f x
 
+runMainParser :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> String -> m String
+runMainParser actoken id_either str = do
+  result <- runParserT (mainParser actoken id_either) "" "" str
+  case result of
+    Right succ -> return $ succ
+    Left err -> return $ show err
 
 ifError :: ParseError -> String
 ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True) $ errorMessages err) $ \case
@@ -193,6 +199,7 @@ memoParser channelAccessToken id_either = Parsec.try $ do
     <|> Parsec.try getAlarm
     <|> Parsec.try sendMemoTo
     <|> Parsec.try readMemo
+    <|> Parsec.try commandMemo
 
   where
     setAlarm = do
@@ -343,6 +350,16 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       let memos = (oldTextsA, (head oldTextsB):text:(tail oldTextsB))
       lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (writeMFile memos)
       return text
+    commandMemo = do -- prev write
+      skipMany space
+      string "--command"
+      skipMany space
+      text <- mainParser channelAccessToken id_either
+      (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
+      let memos = (text:oldTextsA, oldTextsB)
+      lift $ liftIO $ oldTextsA `deepseq` oldTextsB `deepseq` memos `deepseq` (writeMFile memos)
+      return $ "it is written to memo:" ++ text
+
 
     -- ファイルにも型がついてて欲しい
     -- /tmp/memo.txt :: ([String], [String])
@@ -408,19 +425,56 @@ sleepParser id_either = Parsec.try $ do
 centuryParser :: (MonadIO m) => ParsecT String u m String
 centuryParser = Parsec.try $ do
   _ <- string "century"
+  title <- getTitle <|> (return [])
   c <- centuries
   let (_, cs) = runWriter $ century (return c) (\x -> tell [x])
-  return $ intercalate "\n" cs
+  return $ "(title : \"" ++ title ++ "\")\n"
+      ++ intercalate "\n" cs
+
   where
-    centuries = Parsec.try (eof >> return []) <|> mainCentury
+    centuries = Parsec.try (skipMany space >> eof >> return []) <|> mainCentury
     mainCentury = do
       skipMany space
       nengou <- many1 $ satisfy (/=' ')
       skipMany space
       nengous <- centuries
       return (nengou:nengous)
+    getTitle:: Monad m => ParsecT String u m String
+    getTitle = Parsec.try $ do
+      skipMany space
+      string "--title"
+      skipMany space
+      string "("
+      title <- many1 $ satisfy (/=')')
+      string ")"
+      return title
+
+{-composeParser :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
+composeParser actoken id_either = Parsec.try $ do
+  _ <- string "@comp"
+  ini <- many1 $ satisfy (/='@')
+  cs <- composant
+  result <- foldM (\a b -> do
+                     saki <- fmap ((b ++ " ") ++) (runMainParser actoken id_either a)
+                     runMainParser actoken id_either (ini ++ saki)) (return "aa") cs
+  return result
+  where
+    composant = Parsec.try (eof >> return []) <|> mainCompose
+    mainCompose = do
+      skipMany space
+      at <- char '@'
+      c <- many1 $ satisfy (/='@')
+      skipMany space
+      cs <- composant
+      return ((at:c):cs)-}
 
 
+{-nengouParser :: (MonadIO m) => ParsecT String u m String
+nengouParser = Parsec.try $ do
+  _ <- string "nengou"
+  skipMany space
+  searchStr <- many1 anyChar
+  return $ searchEvent searchStr-}
 
 newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 
@@ -517,6 +571,9 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
 -- * 図書館情報
 -- * Monkey Bench https://readingmonkey.blog.fc2.com/blog-entry-769.html
 -- 対話式インターフェース
+--  "@command @memo -w" で今後全ての先頭に"@"がついていない入力の先頭に"@memo -w "を付け足して解釈
+--  "@mode kaiwa" "@mode memo -w"
+-- 年号に名前付けとメモへの出力
 
 helpParser :: MonadIO m => ParsecT String u m String
 helpParser = Parsec.try $ do
