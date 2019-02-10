@@ -80,14 +80,11 @@ main = do
       b <- body
       channelAccessToken <- lift accessToken
       Just (defaultAccount :: String) <- liftIO $ lookupEnv "DEFAULT_ACCOUNT"
-      let acc = readMaybe defaultAccount :: Maybe (Either GroupId UserId)
-      case acc of
-         Just ac -> do
-            str <- runParserT (mainParser channelAccessToken ac) "" "" $ BsUtf8.toString b
-            case str of
-              Right str -> text $ Text.pack str
-              Left str -> text $ Text.pack $ show str
-         Nothing -> fail defaultAccount
+      let ac = Right $ UserId $ defaultAccount
+      str <- runParserT (mainParser channelAccessToken ac) "" "" $ BsUtf8.toString b
+      case str of
+        Right str -> text $ Text.pack str
+        Left str -> text $ Text.pack $ show str
 
     post "/callback" $ do
       channelAccessToken <- lift accessToken
