@@ -71,15 +71,11 @@ main = do
       (opt :: String) <- (param "options")
       Just (defaultAccount::String) <- liftIO $ lookupEnv "DEFAULT_ACCOUNT"
       channelAccessToken <- lift accessToken
-      let acc = (readMaybe defaultAccount) :: Maybe (Either GroupId UserId)
-      text $ Text.pack $ show acc
-      case acc of
-         Just ac -> do
-           str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken ac <|> lsParser <|> Shogi.shogiParser <|> centuryParser) "" "" opt
-           case str of
-              Right str -> text $ Text.pack str
-              Left str -> text $ Text.pack $ show str
-         Nothing -> fail $ "parse error: " ++ show defaultAccount
+      let ac = Right $ UserId $ defaultAccount
+      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken ac <|> lsParser <|> Shogi.shogiParser <|> centuryParser) "" "" opt
+      case str of
+         Right str -> text $ Text.pack str
+         Left str -> text $ Text.pack $ show str
     post "/command" $ do
       b <- body
       channelAccessToken <- lift accessToken
@@ -235,12 +231,19 @@ memoParser channelAccessToken id_either = Parsec.try $ do
           else return $ show id_either
         else return "the pass seem to be wrong.."
 
+    globalIdEither :: (Monad m, MonadIO m, MonadThrow m) => ParsecT String u m (Either GroupId UserId)
+    globalIdEither = do
+      isThereId <- lift $ liftIO $ doesFileExist "/tmp/id_either"
+      if isThereId
+          then lift $ liftIO $ read <$> Prelude.readFile "/tmp/id_either"
+          else return $ id_either
+
     sendMemoTo = do
       skipMany space
       string "--send"
       skipMany space
       (oldTextsA::[String], oldTextsB::[String]) <- literalMemoFile
-      (target_id_either :: Either GroupId UserId) <- lift $ liftIO $ read <$> Prelude.readFile "/tmp/id_either"
+      (target_id_either :: Either GroupId UserId) <- globalIdEither
       case oldTextsB of
           [] -> do
             case (reverse oldTextsA) of
