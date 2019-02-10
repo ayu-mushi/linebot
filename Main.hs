@@ -68,17 +68,18 @@ main = do
       Right parsed <- runParserT Shogi.shogiParser "" "" $ "shogi " <> mv
       html $ Text.pack $ {-Shogi.shogiTest -}parsed
     get "/command/:options" $ do
-      opt <- param "options"
+      (opt :: String) <- (param "options")
       Just (defaultAccount::String) <- liftIO $ lookupEnv "DEFAULT_ACCOUNT"
       channelAccessToken <- lift accessToken
-      let acc = readMaybe defaultAccount :: Maybe (Either GroupId UserId)
+      let acc = (readMaybe defaultAccount) :: Maybe (Either GroupId UserId)
+      text $ Text.pack $ show acc
       case acc of
          Just ac -> do
            str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken ac <|> lsParser <|> Shogi.shogiParser <|> centuryParser) "" "" opt
            case str of
               Right str -> text $ Text.pack str
               Left str -> text $ Text.pack $ show str
-         Nothing -> fail defaultAccount
+         Nothing -> fail $ "parse error: " ++ show defaultAccount
     post "/command" $ do
       b <- body
       channelAccessToken <- lift accessToken
@@ -227,8 +228,11 @@ memoParser channelAccessToken id_either = Parsec.try $ do
       string "--get"
       skipMany space
       isOK <- requirePassword
+      isThereId <- lift $ liftIO $ doesFileExist "/tmp/id_either"
       if isOK
-        then lift $ liftIO $ Prelude.readFile "/tmp/id_either"
+        then if isThereId
+          then lift $ liftIO $ Prelude.readFile "/tmp/id_either"
+          else return $ show id_either
         else return "the pass seem to be wrong.."
 
     sendMemoTo = do
@@ -573,7 +577,8 @@ instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
 -- 対話式インターフェース
 --  "@command @memo -w" で今後全ての先頭に"@"がついていない入力の先頭に"@memo -w "を付け足して解釈
 --  "@mode kaiwa" "@mode memo -w"
--- 年号に名前付けとメモへの出力
+-- DONE: 年号に名前付けとメモへの出力
+-- 同じ符牒を言った人を同じグループに追加する
 
 helpParser :: MonadIO m => ParsecT String u m String
 helpParser = Parsec.try $ do
