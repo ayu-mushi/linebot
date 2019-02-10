@@ -194,6 +194,7 @@ memoParser channelAccessToken id_either = Parsec.try $ do
     <|> Parsec.try sendMemoTo
     <|> Parsec.try readMemo
     <|> Parsec.try commandMemo
+    <|> Parsec.try clearMemo
 
   where
     setAlarm = do
@@ -305,6 +306,13 @@ memoParser channelAccessToken id_either = Parsec.try $ do
         lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
         return "Added."
       else return "input password is invalid."
+
+    clearMemo = do
+      skipMany space
+      string "--clear"
+      let queue = ([], []) :: ([String], [String])
+      lift $ liftIO $ fst queue `deepseq` snd queue `deepseq` (writeMFile queue)
+      return "Cleared."
 
     writeAllMemoLiterally = do
       skipMany space
