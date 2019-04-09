@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell, MonadComprehensions, DeriveFunctor, TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables, BangPatterns#-}
+{-# LANGUAGE Rank2Types #-}
 module Shogi where
 
 import Control.Monad.Trans(liftIO, lift, MonadIO)
@@ -7,7 +8,7 @@ import Control.Exception (try, IOException, SomeException, throwIO, catch)
 import Data.Map as Map(Map, fromList, foldlWithKey, mapWithKey, union, mapKeys, insert, lookup, null, empty, filter, filterWithKey, delete, keys, (!))
 import Data.Maybe (fromMaybe, mapMaybe, catMaybes)
 import Data.Functor(($>), (<$))
-import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&), both, (^.), use, (.=), (%=), at)
+import Control.Lens ((%~), _1, _2, (.~), makeLenses, (&), both, (^.), use, (.=), (%=), at, Lens')
 import Control.Monad (mplus, guard, forM_, MonadPlus, mzero, msum)
 import Control.Monad.State (get, put, StateT(..), State, runStateT, evalStateT, execStateT)
 import qualified Data.List as List(delete, nub, elem)
@@ -54,6 +55,7 @@ data Move = Move { _movPiece :: Piece
 makeLenses ''Move
 
 data Turn = First | Later deriving (Eq,Ord,Read,Show) -- 手番
+-- isSenteban? 先手番かどうか
 
 data Square = Square {_sqPiece::Piece, _sqTurn :: Turn} deriving (Eq,Read,Show)
 
@@ -74,11 +76,13 @@ showSquare (Square pie First) = " " ++ showPiece pie
 
 showField :: Field -> String
 showField (Field mp captured) =
-    let showDan dan mp = (showRowGrid [fromMaybe "　." $ (i, dan) `Map.lookup` mp | i <- [-1..10]])
-      in let danScale = fromList [((0, n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
-        in let (cap::Map (Int, Int) String) = fromList $ [((-1, n), showPiece $ (captured Map.! First) !! n) | n <- [0..(length (captured Map.! First))-1], 0 <= n] <> [((10,n), showPiece $ (captured Map.! Later) !! n) | n <- [0..(length (captured Map.! Later))-1], 0 <= n] --持ち駒
-          in let sujiScale = fromList [((n, 0), show n ++ "　") | n <- [1..9]]-- 目盛り
-            in showColumnGrid $ (map (showDan `flip` (fmap showSquare mp `union` danScale `union` sujiScale `union` cap)) [0..9])
+  let showDan dan mp = (showRowGrid [fromMaybe "　." $ (i, dan) `Map.lookup` mp | i <- [-1..10]])
+    in let danScale = fromList [((0, n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
+      in let (cap::Map (Int, Int) String) = fromList $ [((-1, n), showPiece $ (captured Map.! First) !! n) | n <- [0..(length (captured Map.! First))-1], 0 <= n] <> [((10,n), showPiece $ (captured Map.! Later) !! n) | n <- [0..(length (captured Map.! Later))-1], 0 <= n] --持ち駒
+        in let sujiScale = fromList [((n, 0), show n ++ "　") | n <- [1..9]]-- 目盛り
+          in showColumnGrid $ (map (showDan `flip` (fmap showSquare mp `union` danScale `union` sujiScale `union` cap)) [0..9])
+
+-- HTML！！
 
 
 showRowGrid :: [String] -> String
@@ -113,8 +117,19 @@ danSymmetry = _1 %~ symmetry
 sujiSymmetry :: (Int, Int) -> (Int, Int)
 sujiSymmetry = _2 %~ symmetry
 
-fifiPSymmetry :: (Int, Int) -> (Int, Int) -- (5,5)点対称
+fifiPSymmetry :: (Int, Int) -> (Int, Int) -- (5,5) 点対称
 fifiPSymmetry = danSymmetry . sujiSymmetry
+
+--  lens であらゆるもののsymmetryをとれるようにすれば、盤反転の必要が無くなる？
+--  true -> id
+--  false -> symmetry のように返す
+
+symAt :: (Int, Int) -> Lens' (Map.Map (Int, Int) Square) (Maybe Square)
+symAt = at . fifiPSymmetry
+
+varAt :: Bool -> (Int, Int) -> Lens' (Map.Map (Int, Int) Square) (Maybe Square)
+varAt True = at
+varAt False = symAt
 
 danSymList :: [((Int, Int), Square)] -> [((Int, Int), Square)]
 danSymList = foldl (\xs (loc, pie) -> (danSymmetry loc, pie):((loc, pie):xs)) []
@@ -164,8 +179,7 @@ moveMapZeroProm i@(ix,iy) j@(jx,jy) mp = let x = Map.lookup i mp in
       return $ insert j (a & sqPiece %~ promotion) (Map.delete i mp)
     Nothing -> mzero
 
-
-unmovableZero :: MonadPlus m => Piece -> (Int, Int) -> m ()
+unmovableZero :: MonadPlus m => Piece -> (Int, Int) -> m () -- 不成のルール
 unmovableZero pie xy = do
   guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
   guard (2 < xy^._2 || (pie /= Knight Unpromoted))
@@ -220,16 +234,16 @@ corner1b :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 corner1b = vector1 (1, 1) `mplus` vector1 (-1, 1)
 
 moveAll :: PieceM (Either (Piece, (Int, Int)) (Int, Int)) -> PieceM (Int, Int)
-moveAll move1 = moveAll' `mplus` use _1 where
-  moveAll' = do
-    loc2 <- move1
-    case loc2 of
-      Left (pie, xy) -> do
-        _1 .= xy
-        return (xy::(Int, Int))
-      Right xy -> do
-        _1 .= xy
-        moveAll move1
+-- Eitherは、駒を取ったかどうかを表す
+moveAll move1 = do
+  loc2 <- move1 -- move1に歩を指定すると、`moveAll 歩`は香車の動きになる
+  case loc2 of
+    Left (pie, xy) -> do
+      _1 .= xy
+      return (xy::(Int, Int))
+    Right xy -> do -- 空白のマス目の場合再帰できる
+      _1 .= xy
+      (moveAll move1) `mplus` use _1
 
 height1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 height1 = up1 `mplus` down1
@@ -257,7 +271,7 @@ heightAll :: PieceM (Int, Int)
 heightAll = upAll `mplus` moveAll down1
 
 
-type PieceM = StateT ((Int, Int), Field) [] -- 駒モナド
+type PieceM a = StateT ((Int, Int), Field) [] a -- 駒モナド
 -- ロールバック
 
 eitherPoint :: Either (Piece, (Int, Int)) (Int, Int) -> (Int, Int)
@@ -321,11 +335,12 @@ setMapZero :: MonadPlus m => (Int, Int) -> Piece -> Map.Map (Int, Int) Square ->
 setMapZero i@(ix, iy) pie mp = do
   let x = Map.lookup i mp
   case x of
-       Just _ -> mzero
-       Nothing -> do
-         unmovableZero pie i
-         return $ insert i (Square pie First) mp
+    Just _ -> mzero
+    Nothing -> do
+      unmovableZero pie i
+      return $ insert i (Square pie First) mp
 
+-- 二歩
 ruleOfTwoPone :: MonadPlus m => Piece -> (Int, Int) -> Map.Map (Int, Int) Square -> m ()
 ruleOfTwoPone pie i@(ix,iy) mp =
   guard $ (||) (pie /= Pawn Unpromoted) $ foldl (&&) True $ [(Map.lookup (ix, y) mp) /= Just (Square (Pawn Unpromoted) First) | y <- [1..9]]
@@ -452,6 +467,7 @@ pieceParser = do
                                 "馬" -> Shogi.Bishop Shogi.Promoted
                                 "と金" -> Shogi.Pawn Shogi.Promoted
                                 "と" -> Shogi.Pawn Shogi.Promoted
+                                _ -> error "駒ではない。"
 
   return $ case nari of
     Promoted -> Promoted <$ unpromoteds
@@ -472,8 +488,8 @@ dirParser = (Subtraction <$ string "引")
 moveParser :: (Monad m) => ParsecT String u m (Shogi.Move)
 moveParser = do
   maySym <- (Shogi.fifiPSymmetry <$ char '△') <|> (id <$ return "")
-  n <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
-  m <- (read<$>(msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
+  n <- (read <$> (msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
+  m <- (read <$> (msum $ map (fmap (\x->[x]) . char) "123456789")) <|> chineseNumParser
   piece <- pieceParser
   dirs <- many dirParser
   return $ Shogi.Move piece $ (ToDir $ maySym (n,m)):dirs
@@ -485,6 +501,9 @@ moveParser = do
 -- 銀成と成銀の区別ある? →DONE
 -- 成駒の動きがおかしい
 -- html/cssで非決定盤面を表現
+--   表現するために盤を潰す操作を定義する
+--   [Field] -> QField
+--   やっぱいいか？
 
 shogiParser :: (MonadIO m) => ParsecT String u m String
 shogiParser = Parsec.try $ do
@@ -521,3 +540,4 @@ shogiParser = Parsec.try $ do
 -- \f -> foldl (&&) True . map f
 
 -- data UndoTree a  zipper
+-- 八方桂、獅子、量子将棋
