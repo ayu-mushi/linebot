@@ -34,13 +34,16 @@ import Control.DeepSeq(deepseq)
 import Data.List.Split(splitOn)
 import Text.Read(readMaybe)
 import Century (century)
-import Control.Monad.Writer(runWriter,tell)
+import Control.Monad.Writer(runWriter, tell)
+import Data.Time.Calendar.WeekDate (toWeekDate)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time (utctDay, getZonedTime, ZonedTime, Day, TimeOfDay, localDay, zonedTimeToLocalTime, localTimeOfDay)
 
 import Post as Post
 import Get as Get
 import Text.Parsec as Parsec
 import qualified Shogi as Shogi  (shogiParser)
-import LineScript (lsParser)
+import LineScript ()
 
 main :: IO ()
 main = do
@@ -72,7 +75,7 @@ main = do
       Just (defaultAccount::String) <- liftIO $ lookupEnv "DEFAULT_ACCOUNT"
       channelAccessToken <- lift accessToken
       let ac = Right $ UserId $ defaultAccount
-      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken ac <|> lsParser <|> Shogi.shogiParser <|> centuryParser) "" "" opt
+      str <- runParserT (helpParser <|> secondParser <|> parrotParser <|> memoParser channelAccessToken ac <|> {- lsParser <|>-} Shogi.shogiParser <|> centuryParser <|> todo channelAccessToken ac) "" "" opt
       case str of
          Right str -> text $ Text.pack str
          Left str -> text $ Text.pack $ show str
@@ -165,7 +168,7 @@ mainParser channelAccessToken id_either = do
        Left (a::IOException) -> return ()
        Right str -> if read str == id_either then fail "sleeping" else return ()
   star <- msum $ map char thisappchar
-  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser channelAccessToken id_either <|> Shogi.shogiParser <|> lsParser <|> centuryParser
+  str <- helpParser <|> secondParser <|> sleepParser id_either <|> parrotParser <|> memoParser channelAccessToken id_either <|> Shogi.shogiParser <|> {-lsParser <|>-} centuryParser <|> todo channelAccessToken id_either
   return str
 
 requirePassword :: (MonadIO m) => ParsecT String u m Bool
@@ -176,6 +179,33 @@ requirePassword = do
   Just realPass <- lift $ liftIO $ lookupEnv "PASSWORD"
   return (inputPass == realPass)
 
+todo :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
+todo channelAccessToken id_either = Parsec.try $ do
+  string "todo"
+  d <- liftIO $  day <$> getZonedTime
+  (_, _, youbi) <- liftIO $ toWeekDate <$> day <$> getZonedTime
+  --(_, _, day) <- liftIO $ (toWeekDate) <$> getCurrentTime
+  skipMany space
+  lift $ linePush channelAccessToken id_either $ daytodo youbi
+  return "todo."
+
+  where
+    daytodo 1 = "月"
+    daytodo 2 = "火: 可燃ゴミ"
+    daytodo 3 = "水: プラリサイクル"
+    daytodo 4 = "木: 洗濯"
+    daytodo 5 = "金"
+    daytodo 6 = "土: Listen M"
+    daytodo 7 = "日"
+
+    dayAndTime :: ZonedTime -> (Day, TimeOfDay)
+    dayAndTime zt =
+      let lt = zonedTimeToLocalTime zt
+          day  = localDay lt
+          time = localTimeOfDay lt
+      in (day, time)
+    day  = fst . dayAndTime
+    time = snd . dayAndTime
 
 memoParser :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
 memoParser channelAccessToken id_either = Parsec.try $ do
@@ -573,7 +603,6 @@ selfPost message = do
 instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
   throwM = ActionT . throwM
 
--- * なつくようにする
 -- * 時計
 -- * 一定時間でメモを回す
 -- * どこにメモを出すか設定する
