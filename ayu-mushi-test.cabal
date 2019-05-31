@@ -30,3 +30,4 @@ executable          ayu-mushi-test
                   , deepseq
                   , relational-query
                   , split
+                  , time
