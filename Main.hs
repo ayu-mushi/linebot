@@ -37,7 +37,7 @@ import Century (century)
 import Control.Monad.Writer(runWriter, tell)
 import Data.Time.Calendar.WeekDate (toWeekDate)
 import Data.Time.Clock (getCurrentTime)
-import Data.Time (utctDay, getZonedTime, ZonedTime, Day, TimeOfDay, localDay, zonedTimeToLocalTime, localTimeOfDay)
+import Data.Time (utctDay, getZonedTime, ZonedTime, Day, TimeOfDay, localDay, zonedTimeToLocalTime, localTimeOfDay, utcToZonedTime, hoursToTimeZone)
 
 import Post as Post
 import Get as Get
@@ -182,7 +182,8 @@ requirePassword = do
 todo :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
 todo channelAccessToken id_either = Parsec.try $ do
   string "todo"
-  d <- liftIO $  day <$> getZonedTime
+  d <- liftIO $ (day . utcToZonedTime (hoursToTimeZone 9)) <$> getCurrentTime -- herokuのサーバーがある場所の時刻ではなく日本の時刻をゲットしたい
+
   (_, _, youbi) <- liftIO $ toWeekDate <$> day <$> getZonedTime
   --(_, _, day) <- liftIO $ (toWeekDate) <$> getCurrentTime
   skipMany space
