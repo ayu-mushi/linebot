@@ -1,4 +1,5 @@
-module LineScript (lsParser) where
+module LineScript () where
+
 import Control.Monad (mplus, mzero, MonadPlus, msum)
 import Text.Parsec as Parsec
 
@@ -68,12 +69,7 @@ literalParser = Parsec.try $ do
   <|> (LSNumberC . read <$> (Parsec.try $ many1 digit >> char '.' >> many1 digit))
   <|> (LSNumberC . read <$> many1 digit)
 
-lsParser ::  (Monad m) => ParsecT String u m String
-lsParser = Parsec.try $ do
-  msum $ map (Parsec.try . string) ["ls", "linescript", "l"]
-  skipMany space
-  sent <- seqParser
-  return $ show sent
+
 
 seqSentParser :: (Monad m) => ParsecT String u m (LSSentence String) -- 二重は?
 seqSentParser = do
@@ -95,8 +91,32 @@ continueParser = do
   string "continue"
   return Continue
 
+{-
+evalFormula :: Environment String -> LSFormula String -> LSFormula String
+evalFormula = undefined
+
+evalSent :: (Monad m) => Environment String -> LSSentence String -> (ParsecT String u m String, Environment String)
+evalSent = undefined
+
+evalSents :: (Monad m) => Environment String -> [LSSentence String] -> ParsecT String u m String
+evalSents env [] = return ""
+evalSents env (s:ss) =
+  let (result, env') = evalSent env s in
+    result ++ evalSents env' ss
+
+lsParser ::  (Monad m) => ParsecT String u m String
+lsParser = Parsec.try $ do
+  msum $ map (Parsec.try . string) ["ls", "linescript", "l"]
+  skipMany space
+  sent <- seqParser
+  result <- evalSents sents
+  return $ show sent ++ result
+-}
+
 data LSSentence a = If (LSFormula a) (LSSentence a) | While (LSFormula a) (LSSentence a) | Continue | DefVar a | InitVar a (LSFormula a) | Substitution a (LSFormula a) | Seq [LSSentence a] deriving (Show)
 data LSFormula a = UseVar a | LSTrue | LSFalse | LSNumberC Float deriving (Show)
 data LSType = LSBool | LSString | LSNumber | LSArray deriving (Show)
+
+type Environment a = [(Int, a)]
 
 -- ()は式の結合の優先順位、{}は文の結合の優先順位

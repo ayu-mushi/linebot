@@ -160,6 +160,10 @@ initialField = let later_field = pawnList `Map.union` symmetric_part `Map.union`
      ,((8,2), piece $ Rook Unpromoted)
      ]
 
+initialQField :: [Field] -- 量子将棋の初期盤面
+initialQField = undefined
+
+
 moveMap :: Ord i => i -> i -> Map.Map i a -> Map.Map i a
 moveMap i j mp = let a = mp ! i in insert j a $ Map.delete i mp
 
@@ -185,7 +189,7 @@ unmovableZero pie xy = do
   guard (2 < xy^._2 || (pie /= Knight Unpromoted))
 
 applyPiece :: PieceM (Int, Int) -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
-applyPiece f = do -- 成りを追加
+applyPiece f = do
   original_xy <- use _1
   xy <- f
   _1 .= xy
@@ -194,7 +198,7 @@ applyPiece f = do -- 成りを追加
   case Map.lookup xy original_field of
      Just (Square pie First) -> mzero
      Just (Square pie Later) -> do
-       field <- moveMapZeroProm original_xy xy original_field
+       field <- moveMapZeroProm original_xy xy original_field -- 成る場合
                 `mplus` moveMapZero original_xy xy original_field
        _2 %= (\(Field _ cap) -> Field field $ Map.insert First ((Unpromoted <$ pie):(cap Map.! First)) cap)
 
@@ -243,7 +247,7 @@ moveAll move1 = do
       return (xy::(Int, Int))
     Right xy -> do -- 空白のマス目の場合再帰できる
       _1 .= xy
-      (moveAll move1) `mplus` use _1
+      (moveAll move1) `mplus` use _1 -- もう一度動くか、止まるか  選ぶ
 
 height1 :: PieceM (Either (Piece, (Int, Int)) (Int, Int))
 height1 = up1 `mplus` down1
@@ -360,7 +364,7 @@ settableZone pie fie@(Field fi cap) = do
        Just a -> mzero
        Nothing -> return k
 
-moveOrSet :: Move -> Field -> [Field]
+moveOrSet :: Move -> Field -> [Field] -- 動かす or 打つ
 moveOrSet mv@(Move pie dirs) field = move mv field `mplus` set mv field where
   set mv@(Move pie dirs) field = do
     guard $ not $ DirMove `List.elem` dirs
@@ -381,7 +385,7 @@ moveFrom i@(ix, iy) dirs field@(Field mp cap) =
 -- TODO: 持ち駒を打つ mplus
 move :: Move -> Field -> [Field]
 move (Move pie dirs) field =
-  let (pies::[(Int,Int)]) = keys $ Map.filter (==(Square pie First)) $ (^.fromField) field in
+  let (pies::[(Int,Int)]) = keys $ Map.filter (== (Square pie First)) $ (^.fromField) field in
   let (ex::[((Int,Int),Field)]) = concatMap
                                   (\k -> Prelude.filter
                                     (\(l,a) -> directions pie k (l, a) dirs) $ execStateT (movable pie) (k, field)) pies
@@ -501,6 +505,7 @@ moveParser = do
 -- 銀成と成銀の区別ある? →DONE
 -- 成駒の動きがおかしい
 -- html/cssで非決定盤面を表現
+-- table
 --   表現するために盤を潰す操作を定義する
 --   [Field] -> QField
 --   やっぱいいか？

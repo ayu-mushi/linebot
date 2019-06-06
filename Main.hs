@@ -182,10 +182,7 @@ requirePassword = do
 todo :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
 todo channelAccessToken id_either = Parsec.try $ do
   string "todo"
-  d <- liftIO $ (day . utcToZonedTime (hoursToTimeZone 9)) <$> getCurrentTime -- herokuのサーバーがある場所の時刻ではなく日本の時刻をゲットしたい
-
-  (_, _, youbi) <- liftIO $ toWeekDate <$> day <$> getZonedTime
-  --(_, _, day) <- liftIO $ (toWeekDate) <$> getCurrentTime
+  (_, _, youbi) <- liftIO $ (toWeekDate . day . utcToZonedTime (hoursToTimeZone 9)) <$> getCurrentTime -- herokuのサーバーがある場所の時刻ではなく日本の時刻をゲットしたい
   skipMany space
   lift $ linePush channelAccessToken id_either $ daytodo youbi
   return "todo."
