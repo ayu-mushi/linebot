@@ -183,8 +183,9 @@ todo :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId User
 todo channelAccessToken id_either = Parsec.try $ do
   string "todo"
   (_, _, youbi) <- liftIO $ (toWeekDate . day . utcToZonedTime (hoursToTimeZone 9)) <$> getCurrentTime -- herokuのサーバーがある場所の時刻ではなく日本の時刻をゲットしたい
+  now <- liftIO $ (utcToZonedTime (hoursToTimeZone 9)) <$> getCurrentTime -- herokuのサーバーがある場所の時刻ではなく日本の時刻をゲットしたい
   skipMany space
-  lift $ linePush channelAccessToken id_either $ daytodo youbi
+  lift $ linePush channelAccessToken id_either $ daytodo youbi ++ ": " ++ show now
   return "todo."
 
   where
