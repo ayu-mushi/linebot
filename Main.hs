@@ -145,7 +145,7 @@ ifError err = concat $ flip map (filter (\case SysUnExpect x-> False; _ -> True)
   Parsec.Message "sleeping" -> ""
   Parsec.Message x -> "message" ++ x ++ ".\n"
 
-thisappchar = "☆λ$@%:"
+thisappchar = "☆λ$@%:＠＄"
 
 unicodeParser :: Parsec String u Char
 unicodeParser = Parsec.try $ do
