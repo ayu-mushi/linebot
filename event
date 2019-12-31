@@ -1,0 +1,10 @@
+#!/bin/bash
+ARG=$(echo $1 | sed -e "s/B/紀元前/")
+WEBLIO="https://ja.wikipedia.org/wiki/$ARG%E5%B9%B4"
+
+FILE=$(curl -s $WEBLIO)
+
+echo "$FILE" > /tmp/phonetic.txt
+echo "$1"
+w3m "file:///cgi-bin/code.cgi" -dump | ruby -ne "print if /できごと\[編集\]/../誕生\[編集\]/" | ruby -ne "print if /できごと\[編集\]/../フィクションのできごと\[編集\]/"
+echo "$(w3m "file:///cgi-bin/code.cgi" -dump | ruby -ne "print if /できごと\[編集\]/../誕生\[編集\]/" | ruby -ne "print if /できごと\[編集\]/../フィクションのできごと\[編集\]/" | sed -e 's/\(.*\)/'$1'--\1/g')" >> ~/tmp/events.txt

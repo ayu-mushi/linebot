@@ -17,12 +17,15 @@ module Get
 , ReplyToken(..)
 , UserId(..)
 , GroupId(..)
+, AccessToken(..)
 ) where
 
 import Control.Lens hiding ((.=))
 import Data.Aeson as Aeson
 import Control.Monad (mplus, mzero)
 import qualified Data.ByteString.Lazy as BS (ByteString)
+
+newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
 
 data Message = Message {
   _msType :: String

@@ -61,11 +61,7 @@ main = do
       text agent
     get "/json" $ do
       Scotty.json [(0::Int)..10]
-    get "/line" $ do
-      lr <- liftIO $ MonadCatch.try $ Prelude.readFile "/tmp/linerequest.txt"
-      case lr of
-        Right lr' -> html $ Text.pack lr'
-        Left (e::IOException) -> html "File not found."
+
     get "/shogi/:move" $ do
       mv <- param "move"
       Right parsed <- runParserT Shogi.shogiParser "" "" $ "shogi " <> mv
@@ -205,6 +201,190 @@ todo channelAccessToken id_either = Parsec.try $ do
       in (day, time)
     day  = fst . dayAndTime
     time = snd . dayAndTime
+mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
+mappMaybe may mapp =
+  case may of
+    Just a -> mapp a
+    Nothing -> mzero
+
+secondParser :: (MonadIO m) => ParsecT String u m String
+secondParser = Parsec.try $ do
+  numeric <- Parsec.many1 Parsec.digit <?> "\"list of digit\""
+  Parsec.string "秒後"
+  skipMany space
+  comm <- many anyToken
+  lift $ liftIO $ threadDelay $ read numeric * (10^6)
+  resp <- liftIO $ selfPost comm
+  return $ numeric ++ "秒経過しました！！！！"  ++ "\n\n"++ BsUtf8.toString (responseBody resp)
+
+-- try の位置を変える
+
+parrotParser ::  (Monad m) => ParsecT String u m String
+parrotParser = Parsec.try $ do
+  _ <- msum $ map (Parsec.try . string) ["オウム", "parrot", "鏡", "mirror", "エコー", "echo", "p"]
+  many anyToken
+
+sleepParser ::  (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
+sleepParser id_either = Parsec.try $ do
+  _ <- msum $ map (Parsec.try . string) ["sleep", "眠れ", "眠る", "sl"]
+  skipMany space
+  numeric <- many1 digit <|> return "10"
+  lift $ liftIO $ Prelude.writeFile "is_sleep.txt" $ show id_either
+  lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
+  lift $ liftIO $ removeFile "is_sleep.txt"
+  return ""
+
+centuryParser :: (MonadIO m) => ParsecT String u m String
+centuryParser = Parsec.try $ do
+  _ <- string "century"
+  title <- getTitle <|> (return [])
+  c <- centuries
+  let (_, cs) = runWriter $ century (return c) (\x -> tell [x])
+  return $ "(title : \"" ++ title ++ "\")\n"
+      ++ intercalate "\n" cs
+
+  where
+    centuries = Parsec.try (skipMany space >> eof >> return []) <|> mainCentury
+    mainCentury = do
+      skipMany space
+      nengou <- many1 $ satisfy (/=' ')
+      skipMany space
+      nengous <- centuries
+      return (nengou:nengous)
+    getTitle:: Monad m => ParsecT String u m String
+    getTitle = Parsec.try $ do
+      skipMany space
+      string "--title"
+      skipMany space
+      string "("
+      title <- many1 $ satisfy (/=')')
+      string ")"
+      return title
+
+{-composeParser :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
+composeParser actoken id_either = Parsec.try $ do
+  _ <- string "@comp"
+  ini <- many1 $ satisfy (/='@')
+  cs <- composant
+  result <- foldM (\a b -> do
+                     saki <- fmap ((b ++ " ") ++) (runMainParser actoken id_either a)
+                     runMainParser actoken id_either (ini ++ saki)) (return "aa") cs
+  return result
+  where
+    composant = Parsec.try (eof >> return []) <|> mainCompose
+    mainCompose = do
+      skipMany space
+      at <- char '@'
+      c <- many1 $ satisfy (/='@')
+      skipMany space
+      cs <- composant
+      return ((at:c):cs)-}
+
+
+{-nengouParser :: (MonadIO m) => ParsecT String u m String
+nengouParser = Parsec.try $ do
+  _ <- string "nengou"
+  skipMany space
+  searchStr <- many1 anyChar
+  return $ searchEvent searchStr-}
+
+
+accessToken :: IO AccessToken
+accessToken = do
+  Just channelAccessToken <- lookupEnv "ACCESS_TOKEN"
+  return $ AccessToken channelAccessToken
+
+bearer :: AccessToken -> BSStrict.ByteString
+bearer channelAccessToken = BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ unAccessToken channelAccessToken
+
+lineReply :: (ScottyError e) => AccessToken -> ReplyToken -> String -> ActionT e IO (Response BS.ByteString)
+lineReply channelAccessToken rep_tok message = do
+  req <- parseUrl "https://api.line.me/v2/bot/message/reply"
+  let postRequest = req {
+    method = "POST"
+    , requestHeaders =
+      [ ("Content-Type", "application/json; charser=UTF-8")
+        , ("Authorization", bearer channelAccessToken)
+        ]
+    , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok message
+    }
+  manager <- liftIO $ newManager tlsManagerSettings
+  httpLbs postRequest manager
+
+linePush :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> String -> m (Response BS.ByteString)
+linePush channelAccessToken uid message = do
+  req <- parseUrl "https://api.line.me/v2/bot/message/push"
+  let postRequest = req {
+    method = "POST"
+    , requestHeaders =
+      [ ("Content-Type", "application/json; charser=UTF-8")
+        , ("Authorization", bearer channelAccessToken)
+        ]
+    , requestBody = RequestBodyLBS $ encode $ defPushTextEither uid message
+    }
+  manager <- liftIO $ newManager tlsManagerSettings
+  httpLbs postRequest manager
+
+selfPost :: (MonadIO m, MonadThrow m) => String -> m (Response BS.ByteString)
+selfPost message = do
+  req <- parseUrl "http://ayu-mushi-test.herokuapp.com/command"
+  let postRequest = req {
+    method = "POST"
+    , requestHeaders =
+      [ ("Content-Type", "application/json; charser=UTF-8")
+        --, ("Authorization", bearer channelAccessToken)
+        ]
+    , requestBody = RequestBodyLBS $ BsUtf8.fromString message
+    }
+  manager <- liftIO $ newManager tlsManagerSettings
+  httpLbs postRequest manager
+
+{-
+{
+  "replyToken": "nHuyWiB7yP5Zw52FIkcQobQuGDXCTA",
+  "type": "message",
+  "timestamp": 1462629479859,
+  "source": {
+    "type": "user",
+    "userId": "U4af4980629..."
+  },
+  "message": {
+    "id": "325708",
+    "type": "text",
+    "text": "Hello, world!"
+  }
+}
+
+{"events":
+  [{"type":"message",
+  "replyToken":"fb5ff2b6d4764384be43105de58b6e4a",
+  "source":{"userId":"Ub0292059288c2655f61486607cf0c7b9","type":"user"},
+  "timestamp":1524182254956,
+  "message":{"type":"text",
+            "id":"7822858435458",
+            "text":"Hey I am FAKE REAL"
+            }
+            }
+            ]
+            }
+-}
+
+instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
+  throwM = ActionT . throwM
+
+-- * 時計
+-- * 一定時間でメモを回す
+-- * どこにメモを出すか設定する
+-- * ari3_bot的に状態を保持し、ゲームとかする
+-- * フランベシアちゃん登録者同士での友達登録を容易にする
+-- * Wikipedia DBPedia を利用 https://qiita.com/pika_shi/items/eb56fc205e2d670062ae
+-- * 図書館情報
+-- * Monkey Bench https://readingmonkey.blog.fc2.com/blog-entry-769.html
+-- 対話式インターフェース
+--  "@command @memo -w" で今後全ての先頭に"@"がついていない入力の先頭に"@memo -w "を付け足して解釈
+--  "@mode kaiwa" "@mode memo -w"
+-- DONE: 年号に名前付けとメモへの出力
+-- 同じ符牒を言った人を同じグループに追加する
 
 memoParser :: (Monad m, MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
 memoParser channelAccessToken id_either = Parsec.try $ do
@@ -430,191 +610,6 @@ memoParser channelAccessToken id_either = Parsec.try $ do
 
   -- queue
 
-mappMaybe :: MonadPlus m => Maybe a -> (a -> m b) -> m b
-mappMaybe may mapp =
-  case may of
-    Just a -> mapp a
-    Nothing -> mzero
-
-secondParser :: (MonadIO m) => ParsecT String u m String
-secondParser = Parsec.try $ do
-  numeric <- Parsec.many1 Parsec.digit <?> "\"list of digit\""
-  Parsec.string "秒後"
-  skipMany space
-  comm <- many anyToken
-  lift $ liftIO $ threadDelay $ read numeric * (10^6)
-  resp <- liftIO $ selfPost comm
-  return $ numeric ++ "秒経過しました！！！！"  ++ "\n\n"++ BsUtf8.toString (responseBody resp)
-
--- try の位置を変える
-
-parrotParser ::  (Monad m) => ParsecT String u m String
-parrotParser = Parsec.try $ do
-  _ <- msum $ map (Parsec.try . string) ["オウム", "parrot", "鏡", "mirror", "エコー", "echo", "p"]
-  many anyToken
-
-sleepParser ::  (MonadIO m) => Either GroupId UserId -> ParsecT String u m String
-sleepParser id_either = Parsec.try $ do
-  _ <- msum $ map (Parsec.try . string) ["sleep", "眠れ", "眠る", "sl"]
-  skipMany space
-  numeric <- many1 digit <|> return "10"
-  lift $ liftIO $ Prelude.writeFile "is_sleep.txt" $ show id_either
-  lift $ liftIO $ threadDelay $ (read numeric) * (10^6)
-  lift $ liftIO $ removeFile "is_sleep.txt"
-  return ""
-
-centuryParser :: (MonadIO m) => ParsecT String u m String
-centuryParser = Parsec.try $ do
-  _ <- string "century"
-  title <- getTitle <|> (return [])
-  c <- centuries
-  let (_, cs) = runWriter $ century (return c) (\x -> tell [x])
-  return $ "(title : \"" ++ title ++ "\")\n"
-      ++ intercalate "\n" cs
-
-  where
-    centuries = Parsec.try (skipMany space >> eof >> return []) <|> mainCentury
-    mainCentury = do
-      skipMany space
-      nengou <- many1 $ satisfy (/=' ')
-      skipMany space
-      nengous <- centuries
-      return (nengou:nengous)
-    getTitle:: Monad m => ParsecT String u m String
-    getTitle = Parsec.try $ do
-      skipMany space
-      string "--title"
-      skipMany space
-      string "("
-      title <- many1 $ satisfy (/=')')
-      string ")"
-      return title
-
-{-composeParser :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> ParsecT String u m String
-composeParser actoken id_either = Parsec.try $ do
-  _ <- string "@comp"
-  ini <- many1 $ satisfy (/='@')
-  cs <- composant
-  result <- foldM (\a b -> do
-                     saki <- fmap ((b ++ " ") ++) (runMainParser actoken id_either a)
-                     runMainParser actoken id_either (ini ++ saki)) (return "aa") cs
-  return result
-  where
-    composant = Parsec.try (eof >> return []) <|> mainCompose
-    mainCompose = do
-      skipMany space
-      at <- char '@'
-      c <- many1 $ satisfy (/='@')
-      skipMany space
-      cs <- composant
-      return ((at:c):cs)-}
-
-
-{-nengouParser :: (MonadIO m) => ParsecT String u m String
-nengouParser = Parsec.try $ do
-  _ <- string "nengou"
-  skipMany space
-  searchStr <- many1 anyChar
-  return $ searchEvent searchStr-}
-
-newtype AccessToken = AccessToken { unAccessToken :: String } deriving (Eq)
-
-accessToken :: IO AccessToken
-accessToken = do
-  Just channelAccessToken <- lookupEnv "ACCESS_TOKEN"
-  return $ AccessToken channelAccessToken
-
-bearer :: AccessToken -> BSStrict.ByteString
-bearer channelAccessToken = BS.toStrict $ BsUtf8.fromString $ "Bearer " ++ unAccessToken channelAccessToken
-
-lineReply :: (ScottyError e) => AccessToken -> ReplyToken -> String -> ActionT e IO (Response BS.ByteString)
-lineReply channelAccessToken rep_tok message = do
-  req <- parseUrl "https://api.line.me/v2/bot/message/reply"
-  let postRequest = req {
-    method = "POST"
-    , requestHeaders =
-      [ ("Content-Type", "application/json; charser=UTF-8")
-        , ("Authorization", bearer channelAccessToken)
-        ]
-    , requestBody = RequestBodyLBS $ encode $ defReplyText rep_tok message
-    }
-  manager <- liftIO $ newManager tlsManagerSettings
-  httpLbs postRequest manager
-
-linePush :: (MonadIO m, MonadThrow m) => AccessToken -> Either GroupId UserId -> String -> m (Response BS.ByteString)
-linePush channelAccessToken uid message = do
-  req <- parseUrl "https://api.line.me/v2/bot/message/push"
-  let postRequest = req {
-    method = "POST"
-    , requestHeaders =
-      [ ("Content-Type", "application/json; charser=UTF-8")
-        , ("Authorization", bearer channelAccessToken)
-        ]
-    , requestBody = RequestBodyLBS $ encode $ defPushTextEither uid message
-    }
-  manager <- liftIO $ newManager tlsManagerSettings
-  httpLbs postRequest manager
-
-selfPost :: (MonadIO m, MonadThrow m) => String -> m (Response BS.ByteString)
-selfPost message = do
-  req <- parseUrl "http://ayu-mushi-test.herokuapp.com/command"
-  let postRequest = req {
-    method = "POST"
-    , requestHeaders =
-      [ ("Content-Type", "application/json; charser=UTF-8")
-        --, ("Authorization", bearer channelAccessToken)
-        ]
-    , requestBody = RequestBodyLBS $ BsUtf8.fromString message
-    }
-  manager <- liftIO $ newManager tlsManagerSettings
-  httpLbs postRequest manager
-
-{-
-{
-  "replyToken": "nHuyWiB7yP5Zw52FIkcQobQuGDXCTA",
-  "type": "message",
-  "timestamp": 1462629479859,
-  "source": {
-    "type": "user",
-    "userId": "U4af4980629..."
-  },
-  "message": {
-    "id": "325708",
-    "type": "text",
-    "text": "Hello, world!"
-  }
-}
-
-{"events":
-  [{"type":"message",
-  "replyToken":"fb5ff2b6d4764384be43105de58b6e4a",
-  "source":{"userId":"Ub0292059288c2655f61486607cf0c7b9","type":"user"},
-  "timestamp":1524182254956,
-  "message":{"type":"text",
-            "id":"7822858435458",
-            "text":"Hey I am FAKE REAL"
-            }
-            }
-            ]
-            }
--}
-
-instance (MonadThrow m, ScottyError e) => MonadThrow (ActionT e m) where
-  throwM = ActionT . throwM
-
--- * 時計
--- * 一定時間でメモを回す
--- * どこにメモを出すか設定する
--- * ari3_bot的に状態を保持し、ゲームとかする
--- * フランベシアちゃん登録者同士での友達登録を容易にする
--- * Wikipedia DBPedia を利用 https://qiita.com/pika_shi/items/eb56fc205e2d670062ae
--- * 図書館情報
--- * Monkey Bench https://readingmonkey.blog.fc2.com/blog-entry-769.html
--- 対話式インターフェース
---  "@command @memo -w" で今後全ての先頭に"@"がついていない入力の先頭に"@memo -w "を付け足して解釈
---  "@mode kaiwa" "@mode memo -w"
--- DONE: 年号に名前付けとメモへの出力
--- 同じ符牒を言った人を同じグループに追加する
 
 helpParser :: MonadIO m => ParsecT String u m String
 helpParser = Parsec.try $ do

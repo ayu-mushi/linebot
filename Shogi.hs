@@ -45,6 +45,7 @@ showPiece (Rook Unpromoted) = "飛"
 showPiece (Rook Promoted) = "竜"
 showPiece (Bishop Unpromoted) = "角"
 showPiece (Bishop Promoted) = "馬"
+-- パーサーみたいにエラーを文字列で出す
 
 data Promotion = Promoted | Unpromoted deriving (Eq,Show,Read)
 data Direction = DirMove | DirSet | ToDir (Int,Int) | IsPromotion Promotion | Top | DirectUp | Par | Subtraction | DirLeft | DirRight deriving (Eq,Show,Read)
@@ -62,7 +63,8 @@ data Square = Square {_sqPiece::Piece, _sqTurn :: Turn} deriving (Eq,Read,Show)
 makeLenses ''Square
 
 data Field = Field { _fromField :: Map.Map (Int,Int) Square,
-                     _caputured :: Map.Map Turn [Piece]} deriving (Eq,Show,Read) -- コモナド?
+                     _caputured :: Map.Map Turn [Piece],
+                     _isSenteban :: Bool } deriving (Eq,Show,Read) -- コモナド?
 
 makeLenses ''Field
 
@@ -75,7 +77,7 @@ showSquare (Square pie First) = " " ++ showPiece pie
 
 
 showField :: Field -> String
-showField (Field mp captured) =
+showField Field {_fromField = mp, _caputured = captured} =
   let showDan dan mp = (showRowGrid [fromMaybe "　." $ (i, dan) `Map.lookup` mp | i <- [-1..10]])
     in let danScale = fromList [((0, n), show $ ChineseNumber n) | n <- [1..9]]-- 目盛り
       in let (cap::Map (Int, Int) String) = fromList $ [((-1, n), showPiece $ (captured Map.! First) !! n) | n <- [0..(length (captured Map.! First))-1], 0 <= n] <> [((10,n), showPiece $ (captured Map.! Later) !! n) | n <- [0..(length (captured Map.! Later))-1], 0 <= n] --持ち駒
@@ -123,13 +125,15 @@ fifiPSymmetry = danSymmetry . sujiSymmetry
 --  lens であらゆるもののsymmetryをとれるようにすれば、盤反転の必要が無くなる？
 --  true -> id
 --  false -> symmetry のように返す
-
 symAt :: (Int, Int) -> Lens' (Map.Map (Int, Int) Square) (Maybe Square)
 symAt = at . fifiPSymmetry
 
 varAt :: Bool -> (Int, Int) -> Lens' (Map.Map (Int, Int) Square) (Maybe Square)
 varAt True = at
 varAt False = symAt
+
+relativeAt :: (Int, Int) -> Lens' Field (Maybe Square)
+relativeAt (x, y) = undefined
 
 danSymList :: [((Int, Int), Square)] -> [((Int, Int), Square)]
 danSymList = foldl (\xs (loc, pie) -> (danSymmetry loc, pie):((loc, pie):xs)) []
@@ -138,11 +142,17 @@ bothSymMap :: Map.Map (Int, Int) Square -> Map.Map (Int, Int) Square
 bothSymMap = foldlWithKey (\xs loc pie -> insert (fifiPSymmetry loc) (pie & sqTurn %~ turnChange) xs) Map.empty
 
 reverseField :: Field -> Field
-reverseField (Field fie mochi) = Field (foldlWithKey (\xs loc pie -> insert (fifiPSymmetry loc) (pie & sqTurn %~ turnChange) xs) Map.empty fie) $ fromList [(First, mochi Map.! Later), (Later, mochi Map.! First)]
+reverseField Field {_fromField=fie,_caputured= mochi} =
+  Field {
+    _fromField = foldlWithKey (\xs loc pie -> insert (fifiPSymmetry loc) (pie & sqTurn %~ turnChange) xs) Map.empty fie
+    ,_caputured  = fromList [(First, mochi Map.! Later), (Later, mochi Map.! First)]
+  }
 
 initialField :: Field
 initialField = let later_field = pawnList `Map.union` symmetric_part `Map.union` unsym_part
-                   in Field (later_field `union` bothSymMap later_field) $ fromList [(First, []), (Later, [])]
+                   in Field {
+                     _fromField = (later_field `union` bothSymMap later_field),
+                     _caputured = fromList [(First, []), (Later, [])]}
  where
    piece x = Square x Later
    pawnList = fromList $ [((n, 3), piece $ Pawn Unpromoted) | n <- [1..9]]
@@ -200,7 +210,7 @@ applyPiece f = do
      Just (Square pie Later) -> do
        field <- moveMapZeroProm original_xy xy original_field -- 成る場合
                 `mplus` moveMapZero original_xy xy original_field
-       _2 %= (\(Field _ cap) -> Field field $ Map.insert First ((Unpromoted <$ pie):(cap Map.! First)) cap)
+       _2 %= (\(Field {_caputured= cap}) -> Field {_fromField = field, _caputured = Map.insert First ((Unpromoted <$ pie):(cap Map.! First)) cap})
 
        let pie = ((field ! xy) ^. sqPiece)
        guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
@@ -209,7 +219,7 @@ applyPiece f = do
      Nothing -> do
        field <- moveMapZeroProm original_xy xy original_field
                 `mplus` moveMapZero original_xy xy original_field
-       _2 %= (\(Field _ cap) -> Field field cap)
+       _2 %= (\(Field {_caputured=cap}) -> Field {_fromField=field,_caputured= cap})
 
        let pie = ((field ! xy) ^. sqPiece)
        guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
@@ -281,6 +291,8 @@ type PieceM a = StateT ((Int, Int), Field) [] a -- 駒モナド
 eitherPoint :: Either (Piece, (Int, Int)) (Int, Int) -> (Int, Int)
 eitherPoint = either (^. _2) id
 
+
+
 movable :: Piece -> PieceM (Int, Int)
 movable King = do
   loc1 <- use _1
@@ -317,11 +329,44 @@ movable (Knight Promoted) = movable Gold
 movable (Lance Unpromoted) = do
   loc1 <- use _1
   loc2 <- upAll
+  --loc2 <- moveAll (movable (Pawn Unpromoted))
   guard (loc1 /= loc2)
   return loc2
 movable (Lance Promoted) = movable Gold
 movable (Pawn Unpromoted) = fmap eitherPoint up1
 movable (Pawn Promoted) = movable Gold
+
+
+
+-- 駒の動きをデータ型で表す
+data AtomicKoma = KomaUp
+                  | KomaDown
+                  | KomaRight
+                  | KomaLeft
+                  deriving (Eq, Show, Read)
+                  -- 飛車 = (KomaUp+ | KomaDown+ | KomaRight+ | KomaLeft+)
+
+data KomaAlgebra a = Atom a
+                  | Or (KomaAlgebra a) (KomaAlgebra a)  -- 選択
+                  | And (KomaAlgebra a) (KomaAlgebra a) -- 連結
+                  | JumpAnd (KomaAlgebra a) (KomaAlgebra a) -- ジャンプ連結
+                  | Power (KomaAlgebra a) -- 1回以上の繰り返し
+
+type KomaUgoki = KomaAlgebra AtomicKoma
+
+
+interpretAtomicKoma :: AtomicKoma -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
+interpretAtomicKoma KomaUp = up1
+interpretAtomicKoma KomaDown = down1
+interpretAtomicKoma KomaRight = right1
+interpretAtomicKoma KomaLeft = left1
+
+interpretKomaAlgebra :: KomaAlgebra (PieceM (Either (Piece, (Int, Int)) (Int, Int))) -> PieceM (Either (Piece, (Int, Int)) (Int, Int))
+interpretKomaAlgebra (Atom a) = a
+interpretKomaAlgebra (Or a b) = interpretKomaAlgebra a `mplus` interpretKomaAlgebra b
+interpretKomaAlgebra (And a b) = interpretKomaAlgebra a >> interpretKomaAlgebra b
+interpretKomaAlgebra (JumpAnd a b) = interpretKomaAlgebra a >> interpretKomaAlgebra b
+interpretKomaAlgebra (Power a) = interpretKomaAlgebra a >> interpretKomaAlgebra (Power a)
 
 promotion :: Piece -> Piece
 promotion = (Promoted <$)
@@ -350,14 +395,14 @@ ruleOfTwoPone pie i@(ix,iy) mp =
   guard $ (||) (pie /= Pawn Unpromoted) $ foldl (&&) True $ [(Map.lookup (ix, y) mp) /= Just (Square (Pawn Unpromoted) First) | y <- [1..9]]
 
 setCaptured :: MonadPlus m => Piece -> (Int, Int) -> Field -> m Field
-setCaptured pie i@(ix, iy) (Field fie cap) = do
+setCaptured pie i@(ix, iy) (Field {_fromField=fie,_caputured= cap}) = do
   let my_cap = cap ! First
   guard $ pie `List.elem` my_cap
   fie2 <- setMapZero i pie fie
-  return $ Field fie2 $ insert First (List.delete pie $ my_cap) $ cap
+  return $ Field {_fromField = fie2 ,  _caputured = insert First (List.delete pie $ my_cap) $ cap}
 
 settableZone :: Piece -> Field -> [(Int, Int)]
-settableZone pie fie@(Field fi cap) = do
+settableZone pie fie@(Field {_fromField=fi,_caputured= cap}) = do
   k <- [ (x, y) | x <- [1..9], y <-[1..9] ]
   unmovableZero pie k
   case k `Map.lookup` fi of
@@ -377,7 +422,7 @@ moveOrSet mv@(Move pie dirs) field = move mv field `mplus` set mv field where
 
 
 moveFrom :: (Int, Int) -> [Direction] -> Field -> [Field]
-moveFrom i@(ix, iy) dirs field@(Field mp cap) =
+moveFrom i@(ix, iy) dirs field@(Field {_fromField=mp,_caputured= cap}) =
   let (ex::[((Int,Int),Field)]) = Prelude.filter
                                     (\(l,a) -> directions ((mp ! i)^. sqPiece) i (l, a) dirs) $ execStateT (movable ((mp ! i)^. sqPiece)) (i, field)
                                     in map reverseField $ map (^. _2) ex
