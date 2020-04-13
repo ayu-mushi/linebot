@@ -107,7 +107,7 @@ instance Show ChineseNumber where
   show (ChineseNumber 7) = "七"
   show (ChineseNumber 8) = "八"
   show (ChineseNumber 9) = "九"
-  show _ = "Supported Kan number is [1-9]."
+  show _ = error "Supported Chinese number is [1-9]."
 
 
 symmetry :: Int -> Int
@@ -142,17 +142,19 @@ bothSymMap :: Map.Map (Int, Int) Square -> Map.Map (Int, Int) Square
 bothSymMap = foldlWithKey (\xs loc pie -> insert (fifiPSymmetry loc) (pie & sqTurn %~ turnChange) xs) Map.empty
 
 reverseField :: Field -> Field
-reverseField Field {_fromField=fie,_caputured= mochi} =
+reverseField Field {_fromField=fie,_caputured= mochi,_isSenteban=sen} =
   Field {
     _fromField = foldlWithKey (\xs loc pie -> insert (fifiPSymmetry loc) (pie & sqTurn %~ turnChange) xs) Map.empty fie
     ,_caputured  = fromList [(First, mochi Map.! Later), (Later, mochi Map.! First)]
+    ,_isSenteban=sen
   }
 
 initialField :: Field
 initialField = let later_field = pawnList `Map.union` symmetric_part `Map.union` unsym_part
                    in Field {
                      _fromField = (later_field `union` bothSymMap later_field),
-                     _caputured = fromList [(First, []), (Later, [])]}
+                     _caputured = fromList [(First, []), (Later, [])],
+                     _isSenteban = True}
  where
    piece x = Square x Later
    pawnList = fromList $ [((n, 3), piece $ Pawn Unpromoted) | n <- [1..9]]
@@ -210,7 +212,7 @@ applyPiece f = do
      Just (Square pie Later) -> do
        field <- moveMapZeroProm original_xy xy original_field -- 成る場合
                 `mplus` moveMapZero original_xy xy original_field
-       _2 %= (\(Field {_caputured= cap}) -> Field {_fromField = field, _caputured = Map.insert First ((Unpromoted <$ pie):(cap Map.! First)) cap})
+       _2 %= (\(Field {_caputured= cap, _isSenteban=sen}) -> Field {_fromField = field, _caputured = Map.insert First ((Unpromoted <$ pie):(cap Map.! First)) cap, _isSenteban=sen})
 
        let pie = ((field ! xy) ^. sqPiece)
        guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
@@ -219,7 +221,7 @@ applyPiece f = do
      Nothing -> do
        field <- moveMapZeroProm original_xy xy original_field
                 `mplus` moveMapZero original_xy xy original_field
-       _2 %= (\(Field {_caputured=cap}) -> Field {_fromField=field,_caputured= cap})
+       _2 %= (\(Field {_caputured=cap, _isSenteban=sen}) -> Field {_fromField=field,_caputured= cap, _isSenteban=sen})
 
        let pie = ((field ! xy) ^. sqPiece)
        guard (1 /= xy^._2 || (pie /= Pawn Unpromoted && pie /= Lance Unpromoted))
@@ -366,7 +368,9 @@ interpretKomaAlgebra (Atom a) = a
 interpretKomaAlgebra (Or a b) = interpretKomaAlgebra a `mplus` interpretKomaAlgebra b
 interpretKomaAlgebra (And a b) = interpretKomaAlgebra a >> interpretKomaAlgebra b
 interpretKomaAlgebra (JumpAnd a b) = interpretKomaAlgebra a >> interpretKomaAlgebra b
-interpretKomaAlgebra (Power a) = interpretKomaAlgebra a >> interpretKomaAlgebra (Power a)
+interpretKomaAlgebra (Power a) = interpretKomaAlgebra a
+                              >> (undefined
+                                  `mplus` interpretKomaAlgebra (Power a))
 
 promotion :: Piece -> Piece
 promotion = (Promoted <$)
@@ -395,11 +399,11 @@ ruleOfTwoPone pie i@(ix,iy) mp =
   guard $ (||) (pie /= Pawn Unpromoted) $ foldl (&&) True $ [(Map.lookup (ix, y) mp) /= Just (Square (Pawn Unpromoted) First) | y <- [1..9]]
 
 setCaptured :: MonadPlus m => Piece -> (Int, Int) -> Field -> m Field
-setCaptured pie i@(ix, iy) (Field {_fromField=fie,_caputured= cap}) = do
+setCaptured pie i@(ix, iy) (Field {_fromField=fie,_caputured= cap, _isSenteban=sen}) = do
   let my_cap = cap ! First
   guard $ pie `List.elem` my_cap
   fie2 <- setMapZero i pie fie
-  return $ Field {_fromField = fie2 ,  _caputured = insert First (List.delete pie $ my_cap) $ cap}
+  return $ Field {_fromField = fie2 ,  _caputured = insert First (List.delete pie $ my_cap) $ cap, _isSenteban=sen}
 
 settableZone :: Piece -> Field -> [(Int, Int)]
 settableZone pie fie@(Field {_fromField=fi,_caputured= cap}) = do
