@@ -84,7 +84,9 @@ main = do
       case str of
         Right str -> text $ Text.pack str
         Left str -> text $ Text.pack $ show str
-
+    post "/echo" $ do
+      b <- body
+      html $ Text.pack $ show $ b
     post "/callback" $ do
       channelAccessToken <- lift accessToken
       b <- body
